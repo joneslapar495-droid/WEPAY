@@ -1,10 +1,10 @@
 import { act } from "react";
-import { Alert } from "react-native";
 import { createRoot, type Root, type TestInstance } from "test-renderer";
 import { router } from "expo-router";
 import { despesasPessoaisApi } from "@/services/api";
+import { Alert } from "@/services/feedback";
 import { useCategoriasFinanceiras } from "@/hooks/useCategoriasFinanceiras";
-import NovaDespesaPessoal from "./nova-despesa-pessoal";
+import NovaDespesaPessoal from "../app/(main)/personal/nova-despesa-pessoal";
 
 jest.mock("react-native", () => ({
   ActivityIndicator: "ActivityIndicator",
@@ -41,6 +41,14 @@ jest.mock("@/services/api", () => ({
 
 jest.mock("@/hooks/useCategoriasFinanceiras", () => ({
   useCategoriasFinanceiras: jest.fn(),
+}));
+
+jest.mock("@/hooks/useAppTheme", () => ({
+  useAppTheme: () =>
+    jest.requireActual<typeof import("@/constants/Cores")>(
+      "@/constants/Cores",
+    ).Cores,
+  useAppThemeScheme: () => "light",
 }));
 
 function findElement(
@@ -94,6 +102,8 @@ function selectDate(root: Root): void {
 
 describe("NovaDespesaPessoal screen", () => {
   let root: Root;
+
+  jest.spyOn(Alert, "alert");
 
   beforeEach(async () => {
     jest.clearAllMocks();

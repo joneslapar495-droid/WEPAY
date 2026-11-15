@@ -4,7 +4,13 @@ from database.connection import get_connection_context, cursor_for
 from models.grupo_model import GrupoModel
 from models.participante_model import ParticipanteModel
 from utils.response_utils import ResponseUtils
-from utils.validators import parse_pagination, parse_positive_int
+from utils.validators import (
+    MAX_GROUP_DESCRIPTION_LENGTH,
+    MAX_GROUP_NAME_LENGTH,
+    MAX_PARTICIPANTS_PER_GROUP,
+    parse_pagination,
+    parse_positive_int,
+)
 
 
 def _is_admin(grupo_id, usuario_id):
@@ -32,8 +38,23 @@ class GrupoController:
             return ResponseUtils.erro("Nome do grupo eh obrigatorio.")
         if len(nome) < 2:
             return ResponseUtils.erro("Nome do grupo deve ter ao menos 2 caracteres.")
+        if len(nome) > MAX_GROUP_NAME_LENGTH:
+            return ResponseUtils.erro(
+                f"Nome do grupo nao pode exceder {MAX_GROUP_NAME_LENGTH} caracteres."
+            )
+        if (
+            descricao is not None
+            and len(descricao) > MAX_GROUP_DESCRIPTION_LENGTH
+        ):
+            return ResponseUtils.erro(
+                f"Descricao nao pode exceder {MAX_GROUP_DESCRIPTION_LENGTH} caracteres."
+            )
         if not isinstance(participantes, list):
             return ResponseUtils.erro("Participantes deve ser uma lista de IDs.")
+        if len(participantes) > MAX_PARTICIPANTS_PER_GROUP:
+            return ResponseUtils.erro(
+                f"O grupo pode ter no maximo {MAX_PARTICIPANTS_PER_GROUP} participantes."
+            )
 
         try:
             ids = {
@@ -43,6 +64,10 @@ class GrupoController:
         except ValueError as exc:
             return ResponseUtils.erro(str(exc))
         ids.discard(int(current_user_id))
+        if len(ids) + 1 > MAX_PARTICIPANTS_PER_GROUP:
+            return ResponseUtils.erro(
+                f"O grupo pode ter no maximo {MAX_PARTICIPANTS_PER_GROUP} participantes."
+            )
 
         with get_connection_context() as conn:
             cursor = cursor_for(conn)
@@ -117,6 +142,17 @@ class GrupoController:
             return ResponseUtils.erro("Nome do grupo eh obrigatorio.")
         if len(nome) < 2:
             return ResponseUtils.erro("Nome do grupo deve ter ao menos 2 caracteres.")
+        if len(nome) > MAX_GROUP_NAME_LENGTH:
+            return ResponseUtils.erro(
+                f"Nome do grupo nao pode exceder {MAX_GROUP_NAME_LENGTH} caracteres."
+            )
+        if (
+            descricao is not None
+            and len(descricao) > MAX_GROUP_DESCRIPTION_LENGTH
+        ):
+            return ResponseUtils.erro(
+                f"Descricao nao pode exceder {MAX_GROUP_DESCRIPTION_LENGTH} caracteres."
+            )
 
         grupo = GrupoModel.buscar_por_id(grupo_id)
         if not grupo:

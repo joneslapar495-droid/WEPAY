@@ -56,6 +56,12 @@ def atualizar(current_user_id):
     return AuthController.atualizar(current_user_id)
 
 
+@auth_bp.route("/avatar", methods=["PUT"])
+@token_required
+def atualizar_avatar(current_user_id):
+    return AuthController.atualizar_avatar(current_user_id)
+
+
 @auth_bp.route("/alterar-senha", methods=["PUT"])
 @token_required
 def alterar_senha(current_user_id):

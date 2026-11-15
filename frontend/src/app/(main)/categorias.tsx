@@ -1,7 +1,8 @@
+import { useAppTheme } from "@/hooks/useAppTheme";
+import type { PaletaSemantica } from "@/constants/Cores";
 import React, { useCallback, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Modal,
   SafeAreaView,
   ScrollView,
@@ -14,6 +15,8 @@ import {
 import { router, useFocusEffect } from "expo-router";
 import { categoriasApi } from "@/services/api";
 import type { Categoria } from "@/types/api";
+import { Alert } from "@/services/feedback";
+import { ICONES_CATEGORIA } from "@/constants/financeCategories";
 
 type TipoCategoria = Categoria["tipo"];
 
@@ -24,6 +27,8 @@ const TIPOS: { valor: TipoCategoria; rotulo: string }[] = [
 ];
 
 export default function CategoriasScreen() {
+  const Cores = useAppTheme();
+  const styles = createStyles(Cores);
   const [categorias, setCategorias] = useState<Categoria[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
@@ -31,6 +36,7 @@ export default function CategoriasScreen() {
   const [categoriaEditada, setCategoriaEditada] = useState<Categoria | null>(null);
   const [nome, setNome] = useState("");
   const [tipo, setTipo] = useState<TipoCategoria>("pessoal");
+  const [icone, setIcone] = useState<string>("📌");
   const [salvando, setSalvando] = useState(false);
   const [removendoId, setRemovendoId] = useState<number | null>(null);
 
@@ -55,6 +61,7 @@ export default function CategoriasScreen() {
     setCategoriaEditada(categoria ?? null);
     setNome(categoria?.nome ?? "");
     setTipo(categoria?.tipo ?? "pessoal");
+    setIcone(categoria?.icone ?? "📌");
     setErro(null);
     setModalVisivel(true);
   }
@@ -74,9 +81,14 @@ export default function CategoriasScreen() {
     setErro(null);
     try {
       if (categoriaEditada) {
-        await categoriasApi.atualizar(categoriaEditada.id, nomeLimpo, tipo);
+        await categoriasApi.atualizar(
+          categoriaEditada.id,
+          nomeLimpo,
+          tipo,
+          icone,
+        );
       } else {
-        await categoriasApi.criar(nomeLimpo, tipo);
+        await categoriasApi.criar(nomeLimpo, tipo, icone);
       }
       setModalVisivel(false);
       await carregar();
@@ -88,9 +100,10 @@ export default function CategoriasScreen() {
   }
 
   function confirmarRemocao(categoria: Categoria) {
+    if (categoria.quantidade_despesas > 0) return;
     Alert.alert(
       "Excluir categoria",
-      `Deseja excluir "${categoria.nome}"? Despesas já registradas não serão alteradas.`,
+      `Deseja excluir "${categoria.nome}"?`,
       [
         { text: "Cancelar", style: "cancel" },
         {
@@ -103,6 +116,7 @@ export default function CategoriasScreen() {
   }
 
   async function remover(categoria: Categoria) {
+    if (categoria.quantidade_despesas > 0) return;
     setRemovendoId(categoria.id);
     setErro(null);
     try {
@@ -113,6 +127,53 @@ export default function CategoriasScreen() {
     } finally {
       setRemovendoId(null);
     }
+  }
+
+  function renderCategoria(categoria: Categoria) {
+    const padrao = categoria.origem === "padrao";
+    const usada = categoria.quantidade_despesas > 0;
+    return (
+      <View key={categoria.id} style={styles.card}>
+        <View style={styles.categoryIcon}>
+          <Text style={styles.categoryIconText}>
+            {categoria.icone || "📌"}
+          </Text>
+        </View>
+        <View style={styles.categoryInfo}>
+          <Text style={styles.categoryName}>{categoria.nome}</Text>
+          <Text style={styles.categoryType}>
+            {padrao ? "Padrão" : "Personalizada"} ·{" "}
+            {TIPOS.find((item) => item.valor === categoria.tipo)?.rotulo ?? categoria.tipo}
+          </Text>
+          {usada && (
+            <Text style={styles.categoryUsage}>
+              Em uso · {categoria.quantidade_despesas} despesa(s)
+            </Text>
+          )}
+        </View>
+        <View style={styles.actions}>
+          <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel={`Editar ${categoria.nome}`}
+            onPress={() => abrirModal(categoria)}
+            style={styles.action}
+          >
+            <Text style={styles.editText}>Editar</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel={`Excluir ${categoria.nome}`}
+            disabled={usada || removendoId === categoria.id}
+            onPress={() => confirmarRemocao(categoria)}
+            style={styles.action}
+          >
+            {removendoId === categoria.id
+              ? <ActivityIndicator color={Cores.textoNegativo} />
+              : <Text style={[styles.deleteText, usada && styles.disabledText]}>Excluir</Text>}
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
   }
 
   return (
@@ -138,53 +199,40 @@ export default function CategoriasScreen() {
       </View>
 
       <Text style={styles.description}>
-        Categorias personalizadas ficam disponíveis nos formulários de despesas.
+        Edite nomes e ícones. Categorias vinculadas a despesas não podem ser excluídas.
       </Text>
 
       {erro && !modalVisivel && <Text accessibilityRole="alert" style={styles.error}>{erro}</Text>}
 
       {carregando ? (
-        <ActivityIndicator color="#00A17A" style={styles.loader} />
-      ) : categorias.length === 0 ? (
-        <Text style={styles.empty}>Nenhuma categoria disponível.</Text>
+        <ActivityIndicator color={Cores.textoPositivo} style={styles.loader} />
       ) : (
         <ScrollView contentContainerStyle={styles.list}>
-          {categorias.map((categoria) => {
-            const personalizada = categoria.usuario_id !== null;
-            return (
-              <View key={categoria.id} style={styles.card}>
-                <View style={styles.categoryInfo}>
-                  <Text style={styles.categoryName}>{categoria.nome}</Text>
-                  <Text style={styles.categoryType}>
-                    {personalizada ? "Personalizada" : "Padrão"} · {TIPOS.find((item) => item.valor === categoria.tipo)?.rotulo ?? categoria.tipo}
-                  </Text>
-                </View>
-                {personalizada && (
-                  <View style={styles.actions}>
-                    <TouchableOpacity
-                      accessibilityRole="button"
-                      accessibilityLabel={`Editar ${categoria.nome}`}
-                      onPress={() => abrirModal(categoria)}
-                      style={styles.action}
-                    >
-                      <Text style={styles.editText}>Editar</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      accessibilityRole="button"
-                      accessibilityLabel={`Excluir ${categoria.nome}`}
-                      onPress={() => confirmarRemocao(categoria)}
-                      disabled={removendoId === categoria.id}
-                      style={styles.action}
-                    >
-                      {removendoId === categoria.id
-                        ? <ActivityIndicator color="#D24A3B" />
-                        : <Text style={styles.deleteText}>Excluir</Text>}
-                    </TouchableOpacity>
-                  </View>
-                )}
-              </View>
-            );
-          })}
+          <Text style={styles.sectionTitle}>Padrão · Pessoal</Text>
+          {categorias
+            .filter((item) => item.origem === "padrao" && item.tipo === "pessoal")
+            .map(renderCategoria)}
+          <Text style={styles.sectionTitle}>Padrão · Grupo</Text>
+          {categorias
+            .filter((item) => item.origem === "padrao" && item.tipo === "grupo")
+            .map(renderCategoria)}
+          {categorias.some((item) => item.origem === "padrao" && item.tipo === "ambos") && (
+            <>
+              <Text style={styles.sectionTitle}>Padrão · Pessoal e grupo</Text>
+              {categorias
+                .filter((item) => item.origem === "padrao" && item.tipo === "ambos")
+                .map(renderCategoria)}
+            </>
+          )}
+          <Text style={styles.sectionTitle}>Personalizadas</Text>
+          {!categorias.some((item) => item.origem === "personalizada") && (
+            <Text style={styles.empty}>
+              Você ainda não criou categorias personalizadas.
+            </Text>
+          )}
+          {categorias
+            .filter((item) => item.origem === "personalizada")
+            .map(renderCategoria)}
         </ScrollView>
       )}
 
@@ -206,11 +254,33 @@ export default function CategoriasScreen() {
               value={nome}
               onChangeText={setNome}
               placeholder="Nome da categoria"
-              placeholderTextColor="#8AA69E"
+              placeholderTextColor={Cores.placeholder}
               maxLength={100}
               editable={!salvando}
-              autoFocus
             />
+            <Text style={styles.typeLabel}>Ícone</Text>
+            <ScrollView
+              style={styles.iconScroll}
+              contentContainerStyle={styles.iconGrid}
+              showsVerticalScrollIndicator
+            >
+              {ICONES_CATEGORIA.map((opcao) => (
+                <TouchableOpacity
+                  key={opcao}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Selecionar ícone ${opcao}`}
+                  accessibilityState={{ selected: icone === opcao }}
+                  style={[
+                    styles.iconOption,
+                    icone === opcao && styles.iconOptionActive,
+                  ]}
+                  onPress={() => setIcone(opcao)}
+                  disabled={salvando}
+                >
+                  <Text style={styles.iconOptionText}>{opcao}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
             <Text style={styles.typeLabel}>Disponível para</Text>
             <View style={styles.typeOptions}>
               {TIPOS.map((item) => (
@@ -220,7 +290,9 @@ export default function CategoriasScreen() {
                   accessibilityState={{ selected: tipo === item.valor }}
                   style={[styles.typeOption, tipo === item.valor && styles.typeOptionActive]}
                   onPress={() => setTipo(item.valor)}
-                  disabled={salvando}
+                  disabled={salvando || Boolean(
+                    categoriaEditada && categoriaEditada.quantidade_despesas > 0
+                  )}
                 >
                   <Text style={[styles.typeText, tipo === item.valor && styles.typeTextActive]}>
                     {item.rotulo}
@@ -228,6 +300,11 @@ export default function CategoriasScreen() {
                 </TouchableOpacity>
               ))}
             </View>
+            {categoriaEditada?.quantidade_despesas ? (
+              <Text style={styles.categoryUsage}>
+                O tipo não pode ser alterado enquanto houver despesas vinculadas.
+              </Text>
+            ) : null}
             {erro && modalVisivel && <Text accessibilityRole="alert" style={styles.error}>{erro}</Text>}
             <View style={styles.modalActions}>
               <TouchableOpacity
@@ -243,7 +320,7 @@ export default function CategoriasScreen() {
                 onPress={() => void salvar()}
               >
                 {salvando
-                  ? <ActivityIndicator color="#FFFFFF" />
+                  ? <ActivityIndicator color={Cores.textoSobreMarca} />
                   : <Text style={styles.saveText}>Salvar</Text>}
               </TouchableOpacity>
             </View>
@@ -254,8 +331,8 @@ export default function CategoriasScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#F5FBF7" },
+const createStyles = (Cores: PaletaSemantica) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: Cores.fundo },
   header: {
     minHeight: 64,
     flexDirection: "row",
@@ -269,23 +346,30 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     borderRadius: 12,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: Cores.cartaoFundo,
     borderWidth: 1,
-    borderColor: "#E1EEE8",
+    borderColor: Cores.borda,
   },
-  backText: { color: "#0B3B33", fontSize: 30, lineHeight: 34 },
-  title: { color: "#0B3B33", fontSize: 18, fontWeight: "700" },
+  backText: { color: Cores.texto, fontSize: 30, lineHeight: 34 },
+  title: { color: Cores.texto, fontSize: 18, fontWeight: "700" },
   addButton: {
     width: 40,
     height: 40,
     alignItems: "center",
     justifyContent: "center",
     borderRadius: 12,
-    backgroundColor: "#00C896",
+    backgroundColor: Cores.principal,
   },
-  addText: { color: "#0B3B33", fontSize: 28, lineHeight: 32 },
-  description: { paddingHorizontal: 18, paddingBottom: 8, color: "#6B8F86", fontSize: 12 },
+  addText: { color: Cores.textoSobrePrincipal, fontSize: 28, lineHeight: 32 },
+  description: { paddingHorizontal: 18, paddingBottom: 8, color: Cores.textoSuave, fontSize: 12 },
   list: { padding: 18, paddingTop: 8, paddingBottom: 30 },
+  sectionTitle: {
+    color: Cores.texto,
+    fontSize: 14,
+    fontWeight: "700",
+    marginTop: 14,
+    marginBottom: 8,
+  },
   card: {
     minHeight: 68,
     flexDirection: "row",
@@ -294,39 +378,71 @@ const styles = StyleSheet.create({
     marginBottom: 9,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: "#E1EEE8",
-    backgroundColor: "#FFFFFF",
+    borderColor: Cores.borda,
+    backgroundColor: Cores.cartaoFundo,
   },
+  categoryIcon: {
+    width: 40,
+    height: 40,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 12,
+    borderRadius: 12,
+    backgroundColor: Cores.superficieIcone,
+  },
+  categoryIconText: { fontSize: 21 },
   categoryInfo: { flex: 1, paddingRight: 8 },
-  categoryName: { color: "#0B3B33", fontSize: 14, fontWeight: "700" },
-  categoryType: { color: "#6B8F86", fontSize: 11, marginTop: 4 },
+  categoryName: { color: Cores.texto, fontSize: 14, fontWeight: "700" },
+  categoryType: { color: Cores.textoSuave, fontSize: 11, marginTop: 4 },
+  categoryUsage: { color: Cores.textoAvisoForte, fontSize: 10, marginTop: 4 },
   actions: { flexDirection: "row", alignItems: "center", gap: 8 },
   action: { padding: 7 },
-  editText: { color: "#008A69", fontSize: 12, fontWeight: "700" },
-  deleteText: { color: "#D24A3B", fontSize: 12, fontWeight: "700" },
+  editText: { color: Cores.textoPositivoAlternativo, fontSize: 12, fontWeight: "700" },
+  deleteText: { color: Cores.textoNegativo, fontSize: 12, fontWeight: "700" },
+  disabledText: { color: Cores.desabilitado },
   loader: { marginTop: 48 },
-  empty: { padding: 28, color: "#6B8F86", textAlign: "center" },
+  empty: { padding: 28, color: Cores.textoSuave, textAlign: "center" },
   error: {
     marginHorizontal: 18,
     marginTop: 8,
     padding: 12,
     borderRadius: 10,
-    color: "#A72F2F",
-    backgroundColor: "#FCE8E6",
+    color: Cores.textoErro,
+    backgroundColor: Cores.superficieErro,
     fontSize: 12,
   },
   overlay: { flex: 1, justifyContent: "center", backgroundColor: "rgba(0,0,0,0.45)", padding: 22 },
-  modal: { padding: 20, borderRadius: 18, backgroundColor: "#FFFFFF" },
-  modalTitle: { color: "#0B3B33", fontSize: 18, fontWeight: "700", marginBottom: 16 },
+  modal: { padding: 20, borderRadius: 18, backgroundColor: Cores.cartaoFundo },
+  modalTitle: { color: Cores.texto, fontSize: 18, fontWeight: "700", marginBottom: 16 },
   input: {
     height: 50,
     paddingHorizontal: 14,
     borderWidth: 1,
-    borderColor: "#E1EEE8",
+    borderColor: Cores.borda,
     borderRadius: 12,
-    color: "#0B3B33",
+    color: Cores.texto,
   },
-  typeLabel: { color: "#0B3B33", fontSize: 12, fontWeight: "700", marginTop: 16, marginBottom: 8 },
+  typeLabel: { color: Cores.texto, fontSize: 12, fontWeight: "700", marginTop: 16, marginBottom: 8 },
+  iconScroll: { maxHeight: 180 },
+  iconGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "center",
+    paddingVertical: 2,
+  },
+  iconOption: {
+    width: 42,
+    height: 42,
+    alignItems: "center",
+    justifyContent: "center",
+    margin: 3,
+    borderRadius: 11,
+    borderWidth: 1,
+    borderColor: Cores.borda,
+    backgroundColor: Cores.cartaoFundo,
+  },
+  iconOptionActive: { borderColor: Cores.principalEscuro, backgroundColor: Cores.superficieVerdeSelecionada },
+  iconOptionText: { fontSize: 22 },
   typeOptions: { flexDirection: "row", gap: 6 },
   typeOption: {
     flex: 1,
@@ -336,15 +452,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 5,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: "#E1EEE8",
-    backgroundColor: "#FFFFFF",
+    borderColor: Cores.borda,
+    backgroundColor: Cores.cartaoFundo,
   },
-  typeOptionActive: { borderColor: "#00C896", backgroundColor: "#DDF7EE" },
-  typeText: { color: "#6B8F86", fontSize: 11, fontWeight: "600" },
-  typeTextActive: { color: "#0B3B33" },
+  typeOptionActive: { borderColor: Cores.principal, backgroundColor: Cores.superficieVerdeSelecionada },
+  typeText: { color: Cores.textoSuave, fontSize: 11, fontWeight: "600" },
+  typeTextActive: { color: Cores.texto },
   modalActions: { flexDirection: "row", justifyContent: "flex-end", gap: 10, marginTop: 20 },
   cancelButton: { minWidth: 85, minHeight: 44, alignItems: "center", justifyContent: "center" },
-  cancelText: { color: "#6B8F86", fontWeight: "700" },
+  cancelText: { color: Cores.textoSuave, fontWeight: "700" },
   saveButton: {
     minWidth: 90,
     minHeight: 44,
@@ -352,7 +468,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     paddingHorizontal: 16,
     borderRadius: 11,
-    backgroundColor: "#00A17A",
+    backgroundColor: Cores.principalEscuro,
   },
-  saveText: { color: "#FFFFFF", fontWeight: "700" },
+  saveText: { color: Cores.textoSobreMarca, fontWeight: "700" },
 });

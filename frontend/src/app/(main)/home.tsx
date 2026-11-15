@@ -1,6 +1,9 @@
+import { useAppTheme } from "@/hooks/useAppTheme";
+import type { PaletaSemantica } from "@/constants/Cores";
 import React, { useCallback, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Image,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -9,11 +12,20 @@ import {
   View,
 } from "react-native";
 import { Redirect, router, useFocusEffect } from "expo-router";
-import { dashboardApi, despesasPessoaisApi, gruposApi } from "@/services/api";
+import {
+  dashboardApi,
+  despesasPessoaisApi,
+  gruposApi,
+  notificacoesApi,
+} from "@/services/api";
 import type { Dashboard, DespesaPessoal, Grupo } from "@/types/api";
 import { useUsuario } from "@/contexts/UsuarioContext";
 import { formatDateForDisplay } from "@/utils/financeInput";
 import { formatCurrencyBRL } from "@/utils/financeFormat";
+import { Feather } from "@expo/vector-icons";
+import { CATEGORIAS_PESSOAIS } from "@/constants/financeCategories";
+import type { CategoriaOpcao } from "@/constants/financeCategories";
+import { useCategoriasFinanceiras } from "@/hooks/useCategoriasFinanceiras";
 
 type Aba = "grupos" | "pessoal";
 
@@ -40,8 +52,13 @@ const iconesCategoria: Record<string, string> = {
   Impostos: "🧾",
   Outros: "📦",
 };
-const iconeCategoria = (categoria: string | null | undefined) =>
-  (categoria && iconesCategoria[categoria]) || "📦";
+const iconeCategoria = (
+  categoria: string | null | undefined,
+  categorias: readonly CategoriaOpcao[],
+) =>
+  (categoria && categorias.find((item) => item.nome === categoria)?.icone)
+  || (categoria && iconesCategoria[categoria])
+  || "📦";
 
 function textoVencimento(dias: number): string {
   if (dias === 0) return "Vence hoje";
@@ -50,13 +67,21 @@ function textoVencimento(dias: number): string {
 }
 
 export default function Home() {
+  const Cores = useAppTheme();
+  const styles = createStyles(Cores);
+  const reminderStyles = createReminderStyles(Cores);
   const { usuario, atualizarSaldoTotal } = useUsuario();
+  const { categorias: categoriasPessoais } = useCategoriasFinanceiras(
+    "pessoal",
+    CATEGORIAS_PESSOAIS,
+  );
   const [abaSelecionada, setAbaSelecionada] = useState<Aba>("pessoal");
   const [dashboard, setDashboard] = useState<Dashboard>(vazioDashboard);
   const [grupos, setGrupos] = useState<Grupo[]>([]);
   const [despesas, setDespesas] = useState<DespesaPessoal[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [erroCarregamento, setErroCarregamento] = useState<string | null>(null);
+  const [naoLidas, setNaoLidas] = useState(0);
   const telaAtiva = useRef(false);
 
   const carregar = useCallback(async () => {
@@ -64,16 +89,26 @@ export default function Home() {
     setCarregando(true);
     setErroCarregamento(null);
     try {
-      const [resumo, gruposResposta, despesasResposta] = await Promise.all([
+      const notificacoesPendentes = notificacoesApi
+        .listar(true, { limit: 1, offset: 0 })
+        .catch((erro: unknown) => {
+          console.warn("Não foi possível carregar o contador de notificações.", erro);
+          return null;
+        });
+      const [resumo, gruposResposta, despesasResposta, notificacoesResposta] = await Promise.all([
         dashboardApi.obter(),
         gruposApi.listar({ limit: 3, offset: 0 }),
         despesasPessoaisApi.listar({ tipo: "despesa", limit: 3, offset: 0 }),
+        notificacoesPendentes,
       ]);
       if (!telaAtiva.current) return;
       setDashboard(resumo.data);
       atualizarSaldoTotal(Number(resumo.data.receber) - Number(resumo.data.pagar));
       setGrupos(gruposResposta.data.slice(0, 3));
       setDespesas(despesasResposta.data.slice(0, 3));
+      if (notificacoesResposta) {
+        setNaoLidas(notificacoesResposta.paginacao.total);
+      }
     } catch (erro) {
       if (telaAtiva.current) {
         setErroCarregamento(
@@ -103,13 +138,52 @@ export default function Home() {
           <View style={styles.headerActions}>
             <TouchableOpacity
               accessibilityRole="button"
-              accessibilityLabel="Abrir notificações"
+              accessibilityLabel={
+                naoLidas > 0
+                  ? `Abrir notificações, ${naoLidas} não lidas`
+                  : "Abrir notificações"
+              }
               style={styles.notificationButton}
               onPress={() => router.push("/(main)/notificacoes")}
             >
-              <Text style={styles.notificationIcon}>🔔</Text>
+              <Feather name="bell" size={22} color={Cores.texto} />
+              {naoLidas > 0 && (
+                <View
+                  style={{
+                    position: "absolute",
+                    top: -4,
+                    right: -4,
+                    minWidth: 18,
+                    height: 18,
+                    paddingHorizontal: 4,
+                    borderRadius: 9,
+                    backgroundColor: Cores.superficieNotificacao,
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <Text style={{ color: Cores.textoSobreMarca, fontSize: 10, fontWeight: "800" }}>
+                    {naoLidas > 99 ? "99+" : naoLidas}
+                  </Text>
+                </View>
+              )}
             </TouchableOpacity>
-            <TouchableOpacity style={styles.avatar} onPress={() => router.push("/(main)/gerenciamento-perfil")}><Text style={styles.avatarText}>{usuario.iniciais}</Text></TouchableOpacity>
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel="Abrir perfil"
+              style={styles.avatar}
+              onPress={() => router.push("/(main)/gerenciamento-perfil")}
+            >
+              {usuario.avatarUrl ? (
+                <Image
+                  accessibilityLabel="Foto de perfil"
+                  source={{ uri: usuario.avatarUrl }}
+                  style={styles.avatarImage}
+                />
+              ) : (
+                <Text style={styles.avatarText}>{usuario.iniciais}</Text>
+              )}
+            </TouchableOpacity>
           </View>
         </View>
 
@@ -158,7 +232,7 @@ export default function Home() {
           <TouchableOpacity style={[styles.segment, abaSelecionada === "grupos" && styles.segmentActive]} onPress={() => setAbaSelecionada("grupos")}><Text style={[styles.segmentText, abaSelecionada === "grupos" && styles.segmentTextActive]}>Em grupo</Text></TouchableOpacity>
         </View>
 
-        {carregando ? <ActivityIndicator color="#00C896" style={{ marginTop: 48 }} /> : erroCarregamento ? (
+        {carregando ? <ActivityIndicator color={Cores.principal} style={{ marginTop: 48 }} /> : erroCarregamento ? (
           <View style={styles.loadError} accessibilityRole="alert">
             <Text style={styles.empty}>Não foi possível carregar a tela inicial.</Text>
             <Text style={styles.errorMessage}>{erroCarregamento}</Text>
@@ -186,7 +260,7 @@ export default function Home() {
             <View style={styles.titleRow}><Text style={styles.sectionTitle}>Despesas pessoais</Text><Text style={styles.count}>{despesas.length}</Text></View>
             {despesas.length === 0 ? <Text style={styles.empty}>Nenhuma despesa pessoal registrada.</Text> : despesas.map((despesa) => (
               <TouchableOpacity key={despesa.id} style={styles.card} onPress={() => router.push({ pathname: "/(main)/personal/detalhes-despesa-pessoal", params: { id: String(despesa.id) } })}>
-                <View style={styles.personalAvatar}><Text style={styles.categoryEmoji} accessible={false}>{iconeCategoria(despesa.categoria)}</Text></View>
+                <View style={styles.personalAvatar}><Text style={styles.categoryEmoji} accessible={false}>{iconeCategoria(despesa.categoria, categoriasPessoais)}</Text></View>
                 <View style={styles.cardInfo}><Text style={styles.cardTitle}>{despesa.descricao}</Text><Text style={styles.cardMeta}>{despesa.categoria || "Outros"} · {formatDateForDisplay(despesa.data_despesa, { day: "2-digit", month: "short" })}</Text></View><Text style={styles.value}>{formatCurrencyBRL(despesa.valor)}</Text>
               </TouchableOpacity>
             ))}
@@ -200,17 +274,17 @@ export default function Home() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#F5FBF7" }, scroll: { padding: 18, paddingBottom: 90 }, header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" }, headerActions: { flexDirection: "row", alignItems: "center", gap: 10 }, notificationButton: { width: 42, height: 42, borderRadius: 14, borderWidth: 1, borderColor: "#E1EEE8", backgroundColor: "#FFFFFF", alignItems: "center", justifyContent: "center" }, notificationIcon: { color: "#0B3B33", fontSize: 25, fontWeight: "700" }, hello: { color: "#6B8F86", fontSize: 12 }, userName: { color: "#0B3B33", fontSize: 20, fontWeight: "700" }, avatar: { width: 42, height: 42, borderRadius: 21, backgroundColor: "#0B3B33", alignItems: "center", justifyContent: "center" }, avatarText: { color: "#FFF", fontWeight: "700" }, balanceCard: { marginTop: 25, backgroundColor: "#0B3B33", padding: 22, borderRadius: 22 }, balanceLabel: { color: "#BFE0D6", fontSize: 13 }, balanceValue: { color: "#FFF", fontSize: 29, fontWeight: "700", marginTop: 6 }, balanceIndicators: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 14 }, positivePill: { backgroundColor: "#DEF7EC", color: "#00A17A", paddingHorizontal: 10, paddingVertical: 6, borderRadius: 16, fontSize: 11, fontWeight: "700" }, negativePill: { backgroundColor: "#FFE7E2", color: "#D24A3B", paddingHorizontal: 10, paddingVertical: 6, borderRadius: 16, fontSize: 11, fontWeight: "700" }, segmentContainer: { marginTop: 16, flexDirection: "row", backgroundColor: "#EAF5F0", borderRadius: 12, padding: 3 }, segment: { flex: 1, paddingVertical: 10, alignItems: "center", borderRadius: 9 }, segmentActive: { backgroundColor: "#0B3B33" }, segmentText: { color: "#6B8F86", fontWeight: "600" }, segmentTextActive: { color: "#FFF" }, content: { marginTop: 22 }, titleRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 10 }, sectionTitle: { color: "#0B3B33", fontWeight: "700", fontSize: 16 }, count: { color: "#6B8F86", fontWeight: "700" }, card: { minHeight: 68, borderWidth: 1, borderColor: "#E1EEE8", backgroundColor: "#FFF", borderRadius: 14, padding: 12, flexDirection: "row", alignItems: "center", marginBottom: 10 }, groupAvatar: { width: 42, height: 42, borderRadius: 13, backgroundColor: "#00C896", alignItems: "center", justifyContent: "center" }, personalAvatar: { width: 42, height: 42, borderRadius: 13, backgroundColor: "#EAF7F3", alignItems: "center", justifyContent: "center" }, categoryEmoji: { fontSize: 23, lineHeight: 28, textAlign: "center" }, groupAvatarText: { color: "#0B3B33", fontWeight: "800" }, cardInfo: { flex: 1, marginLeft: 10 }, cardTitle: { color: "#0B3B33", fontWeight: "700" }, cardMeta: { color: "#6B8F86", fontSize: 11, marginTop: 3 }, value: { color: "#0B3B33", fontWeight: "700", fontSize: 12 }, arrow: { color: "#6B8F86", fontSize: 25 }, empty: { color: "#6B8F86", textAlign: "center", paddingVertical: 28 }, link: { color: "#00A17A", fontWeight: "700", textAlign: "center", padding: 12 }, fab: { position: "absolute", right: 20, bottom: 20, width: 54, height: 54, borderRadius: 18, backgroundColor: "#00C896", alignItems: "center", justifyContent: "center", elevation: 6 }, fabText: { color: "#0B3B33", fontSize: 28 },
+const createStyles = (Cores: PaletaSemantica) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: Cores.fundo }, scroll: { padding: 18, paddingBottom: 90 }, header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" }, headerActions: { flexDirection: "row", alignItems: "center", gap: 10 }, notificationButton: { width: 42, height: 42, borderRadius: 14, borderWidth: 1, borderColor: Cores.borda, backgroundColor: Cores.cartaoFundo, alignItems: "center", justifyContent: "center" }, hello: { color: Cores.textoSuave, fontSize: 12 }, userName: { color: Cores.texto, fontSize: 20, fontWeight: "700" }, avatar: { width: 42, height: 42, borderRadius: 21, backgroundColor: Cores.superficieMarca, alignItems: "center", justifyContent: "center" }, avatarImage: { width: 42, height: 42, borderRadius: 21 }, avatarText: { color: Cores.textoSobreMarca, fontWeight: "700" },   balanceCard: { marginTop: 25, backgroundColor: Cores.superficieMarca, padding: 22, borderRadius: 22 }, balanceLabel: { color: Cores.textoSuaveSobreMarca, fontSize: 13 }, balanceValue: { color: Cores.textoSobreMarca, fontSize: 29, fontWeight: "700", marginTop: 6 }, balanceIndicators: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 14 }, positivePill: { backgroundColor: Cores.superficiePositiva, color: Cores.textoPositivo, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 16, fontSize: 11, fontWeight: "700" }, negativePill: { backgroundColor: Cores.superficieNegativa, color: Cores.textoNegativo, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 16, fontSize: 11, fontWeight: "700" }, segmentContainer: { marginTop: 16, flexDirection: "row", backgroundColor: Cores.superficieMintSuave, borderRadius: 12, padding: 3 }, segment: { flex: 1, paddingVertical: 10, alignItems: "center", borderRadius: 9 }, segmentActive: { backgroundColor: Cores.superficieMarca }, segmentText: { color: Cores.textoSuave, fontWeight: "600" }, segmentTextActive: { color: Cores.textoSobreMarca }, content: { marginTop: 22 }, titleRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 10 }, sectionTitle: { color: Cores.texto, fontWeight: "700", fontSize: 16 }, count: { color: Cores.textoSuave, fontWeight: "700" }, card: { minHeight: 68, borderWidth: 1, borderColor: Cores.borda, backgroundColor: Cores.cartaoFundo, borderRadius: 14, padding: 12, flexDirection: "row", alignItems: "center", marginBottom: 10 }, groupAvatar: { width: 42, height: 42, borderRadius: 13, backgroundColor: Cores.principal, alignItems: "center", justifyContent: "center" }, personalAvatar: { width: 42, height: 42, borderRadius: 13, backgroundColor: Cores.superficieMintClara, alignItems: "center", justifyContent: "center" }, categoryEmoji: { fontSize: 23, lineHeight: 28, textAlign: "center" }, groupAvatarText: { color: Cores.textoSobrePrincipal, fontWeight: "800" }, cardInfo: { flex: 1, marginLeft: 10 }, cardTitle: { color: Cores.texto, fontWeight: "700" }, cardMeta: { color: Cores.textoSuave, fontSize: 11, marginTop: 3 }, value: { color: Cores.texto, fontWeight: "700", fontSize: 12 }, arrow: { color: Cores.textoSuave, fontSize: 25 }, empty: { color: Cores.textoSuave, textAlign: "center", paddingVertical: 28 }, link: { color: Cores.textoPositivo, fontWeight: "700", textAlign: "center", padding: 12 }, fab: { position: "absolute", right: 20, bottom: 20, width: 54, height: 54, borderRadius: 18, backgroundColor: Cores.principal, alignItems: "center", justifyContent: "center", elevation: 6 }, fabText: { color: Cores.textoSobrePrincipal, fontSize: 28 },
   loadError: { alignItems: "center", paddingHorizontal: 24, paddingVertical: 36 },
-  errorMessage: { color: "#6B8F86", textAlign: "center", marginTop: 8 },
-  retryButton: { marginTop: 16, paddingHorizontal: 18, paddingVertical: 12, borderRadius: 12, backgroundColor: "#DDF7EE" },
-  retryText: { color: "#087F5B", fontWeight: "700" },
+  errorMessage: { color: Cores.textoSuave, textAlign: "center", marginTop: 8 },
+  retryButton: { marginTop: 16, paddingHorizontal: 18, paddingVertical: 12, borderRadius: 12, backgroundColor: Cores.superficieVerdeSelecionada },
+  retryText: { color: Cores.textoSucesso, fontWeight: "700" },
 });
 
-const reminderStyles = StyleSheet.create({
+const createReminderStyles = (Cores: PaletaSemantica) => StyleSheet.create({
   remindersSection: { marginTop: 18 },
-  remindersTitle: { color: "#0B3B33", fontSize: 16, fontWeight: "700", marginBottom: 10 },
+  remindersTitle: { color: Cores.texto, fontSize: 16, fontWeight: "700", marginBottom: 10 },
   reminderCard: {
     minHeight: 68,
     flexDirection: "row",
@@ -219,14 +293,14 @@ const reminderStyles = StyleSheet.create({
     marginBottom: 8,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: "#E1EEE8",
-    backgroundColor: "#FFFFFF",
+    borderColor: Cores.borda,
+    backgroundColor: Cores.cartaoFundo,
   },
   reminderInfo: { flex: 1, marginRight: 8 },
-  reminderDescription: { color: "#0B3B33", fontSize: 13, fontWeight: "700" },
-  reminderMeta: { color: "#6B8F86", fontSize: 11, marginTop: 4 },
+  reminderDescription: { color: Cores.texto, fontSize: 13, fontWeight: "700" },
+  reminderMeta: { color: Cores.textoSuave, fontSize: 11, marginTop: 4 },
   reminderAmount: { alignItems: "flex-end" },
-  reminderPay: { color: "#D24A3B", fontSize: 10, fontWeight: "700" },
-  reminderReceive: { color: "#00A17A", fontSize: 10, fontWeight: "700" },
-  reminderValue: { color: "#0B3B33", fontSize: 12, fontWeight: "700", marginTop: 3 },
+  reminderPay: { color: Cores.textoNegativo, fontSize: 10, fontWeight: "700" },
+  reminderReceive: { color: Cores.textoPositivo, fontSize: 10, fontWeight: "700" },
+  reminderValue: { color: Cores.texto, fontSize: 12, fontWeight: "700", marginTop: 3 },
 });

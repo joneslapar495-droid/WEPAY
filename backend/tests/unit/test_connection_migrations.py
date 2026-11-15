@@ -8,11 +8,23 @@ from database.connection import (
     _apply_auth_version_migration,
     _apply_account_anonymization_migration,
     _apply_email_login_migration,
+    _apply_user_updated_timestamp_migration,
+    _apply_created_timestamp_migration,
+    _apply_group_updated_timestamp_migration,
+    _apply_schema_varchar_width_migrations,
+    _apply_user_avatar_migration,
+    _apply_user_pix_key_migration,
     _apply_notification_preferences_migration,
+    _apply_notification_reference_migration,
+    _apply_notification_timestamp_migration,
     _apply_group_expense_observation_migration,
     _apply_group_expense_creator_migration,
     _apply_push_outbox_destination_migration,
     _apply_push_outbox_retention_migration,
+    _apply_gemini_usage_user_index_migration,
+    _apply_payment_idempotency_migration,
+    _apply_categoria_migration,
+    _apply_user_categories_migration,
     _apply_participantes_migration,
     _apply_saldos_migration,
 )
@@ -116,6 +128,87 @@ def test_server_level_database_connection_remains_unpooled(monkeypatch):
     ]
 
 
+def test_ensure_mysql_database_does_not_create_an_existing_database(monkeypatch):
+    class Cursor:
+        def __init__(self):
+            self.statements = []
+
+        def execute(self, statement, params=None):
+            self.statements.append((statement, params))
+
+        def fetchone(self):
+            return ("wepay_db",)
+
+        def close(self):
+            pass
+
+    class Connection:
+        def __init__(self):
+            self.cursor_instance = Cursor()
+            self.committed = False
+            self.closed = False
+
+        def cursor(self):
+            return self.cursor_instance
+
+        def commit(self):
+            self.committed = True
+
+        def close(self):
+            self.closed = True
+
+    connection = Connection()
+    monkeypatch.setattr(
+        database_connection,
+        "_connect_mysql",
+        lambda: connection,
+    )
+    monkeypatch.setattr(database_connection.Config, "DB_NAME", "wepay_db")
+
+    database_connection._ensure_mysql_database()
+
+    assert connection.cursor_instance.statements == [
+        (
+            "SELECT SCHEMA_NAME FROM information_schema.SCHEMATA "
+            "WHERE SCHEMA_NAME = %s",
+            ("wepay_db",),
+        )
+    ]
+    assert not connection.committed
+    assert connection.closed
+
+
+def test_production_database_connections_verify_ca_and_identity(monkeypatch):
+    connected = []
+    monkeypatch.setattr(database_connection, "_connection_pool", None)
+    monkeypatch.setattr(database_connection.Config, "ENVIRONMENT", "production")
+    monkeypatch.setattr(database_connection.Config, "DB_SSL_CA", "C:\\certs\\mysql-ca.pem")
+    monkeypatch.setattr(
+        database_connection,
+        "mysql_connector",
+        SimpleNamespace(
+            pooling=SimpleNamespace(
+                MySQLConnectionPool=lambda **kwargs: connected.append(kwargs)
+                or SimpleNamespace(get_connection=lambda: "pooled")
+            ),
+            connect=lambda **kwargs: connected.append(kwargs) or "direct",
+        ),
+    )
+
+    assert database_connection._connect_mysql() == "direct"
+    assert database_connection._connect_mysql("wepay_db") == "pooled"
+
+    expected_tls = {
+        "ssl_ca": "C:\\certs\\mysql-ca.pem",
+        "ssl_verify_cert": True,
+        "ssl_verify_identity": True,
+    }
+    assert all(
+        {key: params[key] for key in expected_tls} == expected_tls
+        for params in connected
+    )
+
+
 def _legacy_cursor(counts=None):
     return FakeCursor(
         columns={
@@ -211,6 +304,107 @@ def test_email_login_migration_verifies_all_users_and_sets_verified_default():
     )
 
 
+def test_category_migration_adds_type_and_preserves_legacy_created_timestamp():
+    cursor = FakeCursor(
+        columns={
+            "categorias": {
+                "id": "bigint unsigned",
+                "usuario_id": "bigint unsigned",
+                "nome": "varchar(100)",
+                "ativo": "tinyint(1)",
+                "created_at": "datetime",
+                "updated_at": "datetime",
+            }
+        }
+    )
+
+    _apply_categoria_migration(cursor)
+
+    assert cursor.statements[1][0] == (
+        "ALTER TABLE categorias ADD COLUMN tipo "
+        "ENUM('pessoal', 'grupo', 'ambos') NOT NULL DEFAULT 'ambos'"
+    )
+    assert cursor.statements[2][0] == (
+        "ALTER TABLE categorias CHANGE COLUMN created_at criado_em "
+        "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP"
+    )
+    assert cursor.statements[3][0] == (
+        "ALTER TABLE categorias ADD COLUMN icone "
+        "VARCHAR(16) NOT NULL DEFAULT '📌'"
+    )
+    assert cursor.statements[4][0] == (
+        "ALTER TABLE categorias ADD COLUMN origem "
+        "ENUM('padrao', 'personalizada') NOT NULL DEFAULT 'personalizada'"
+    )
+    assert "uq_categoria_usuario_nome_tipo UNIQUE" in cursor.statements[7][0]
+    assert "CREATE TABLE IF NOT EXISTS categorias_icones_usuario" in (
+        cursor.statements[8][0]
+    )
+
+
+def test_category_migration_creates_override_table_for_current_schema():
+    cursor = FakeCursor(
+        columns={
+            "categorias": {
+                "id": "bigint unsigned",
+                "usuario_id": "bigint unsigned",
+                "nome": "varchar(100)",
+                "tipo": "enum('pessoal','grupo','ambos')",
+                "icone": "varchar(16)",
+                "criado_em": "datetime",
+            }
+        }
+    )
+
+    _apply_categoria_migration(cursor)
+
+    assert len(cursor.statements) == 6
+    assert cursor.statements[1][0].startswith(
+        "ALTER TABLE categorias ADD COLUMN origem "
+    )
+    assert "uq_categoria_usuario_nome_tipo UNIQUE" in cursor.statements[4][0]
+    assert "CREATE TABLE IF NOT EXISTS categorias_icones_usuario" in (
+        cursor.statements[5][0]
+    )
+
+
+def test_user_category_migration_normalizes_collations_before_name_comparisons():
+    cursor = FakeCursor(
+        columns={
+            "usuarios": {
+                "id": "bigint unsigned",
+                "categorias_inicializadas": "tinyint(1)",
+            },
+            "categorias": {
+                "id": "bigint unsigned",
+                "usuario_id": "bigint unsigned",
+                "nome": "varchar(100)",
+                "icone": "varchar(16)",
+                "tipo": "enum('pessoal','grupo','ambos')",
+                "origem": "enum('padrao','personalizada')",
+            },
+            "despesas_pessoais": {
+                "categoria_id": "bigint unsigned",
+                "categoria": "varchar(100)",
+                "usuario_id": "bigint unsigned",
+            },
+            "despesas": {
+                "categoria_id": "bigint unsigned",
+                "categoria": "varchar(100)",
+                "criado_por": "bigint unsigned",
+                "pagador_id": "bigint unsigned",
+            },
+        }
+    )
+
+    _apply_user_categories_migration(cursor)
+
+    statements = "\n".join(statement for statement, _ in cursor.statements)
+    assert "CONVERT(c.nome USING utf8mb4) COLLATE utf8mb4_unicode_ci" in statements
+    assert "CONVERT(dp.categoria USING utf8mb4) COLLATE utf8mb4_unicode_ci" in statements
+    assert "CONVERT(d.categoria USING utf8mb4) COLLATE utf8mb4_unicode_ci" in statements
+
+
 def test_email_login_migration_updates_existing_column_to_open_login():
     cursor = FakeCursor(
         columns={
@@ -283,6 +477,164 @@ def test_account_anonymization_migration_keeps_existing_deleted_timestamp():
     assert len(cursor.statements) == 1
 
 
+def test_user_timestamp_migration_adds_missing_updated_timestamp():
+    cursor = FakeCursor(columns={"usuarios": {"id": "bigint unsigned"}})
+
+    _apply_user_updated_timestamp_migration(cursor)
+
+    assert cursor.statements[1][0] == (
+        "ALTER TABLE usuarios ADD COLUMN atualizado_em "
+        "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP "
+        "ON UPDATE CURRENT_TIMESTAMP"
+    )
+
+
+def test_user_timestamp_migration_renames_legacy_updated_at():
+    cursor = FakeCursor(
+        columns={
+            "usuarios": {
+                "id": "bigint unsigned",
+                "updated_at": "timestamp",
+            }
+        }
+    )
+
+    _apply_user_updated_timestamp_migration(cursor)
+
+    assert cursor.statements[1][0] == (
+        "ALTER TABLE usuarios CHANGE COLUMN updated_at atualizado_em "
+        "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP "
+        "ON UPDATE CURRENT_TIMESTAMP"
+    )
+
+
+def test_user_timestamp_migration_preserves_current_timestamp_column():
+    cursor = FakeCursor(
+        columns={
+            "usuarios": {
+                "id": "bigint unsigned",
+                "atualizado_em": "datetime",
+            }
+        }
+    )
+
+    _apply_user_updated_timestamp_migration(cursor)
+
+    assert len(cursor.statements) == 1
+
+
+def test_created_timestamp_migration_renames_legacy_created_at():
+    cursor = FakeCursor(
+        columns={
+            "grupos": {
+                "id": "bigint unsigned",
+                "created_at": "datetime",
+            }
+        }
+    )
+
+    _apply_created_timestamp_migration(cursor, "grupos")
+
+    assert cursor.statements[1][0] == (
+        "ALTER TABLE `grupos` CHANGE COLUMN created_at criado_em "
+        "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP"
+    )
+
+
+def test_group_updated_timestamp_migration_renames_legacy_updated_at():
+    cursor = FakeCursor(
+        columns={
+            "grupos": {
+                "id": "bigint unsigned",
+                "updated_at": "datetime",
+            }
+        }
+    )
+
+    _apply_group_updated_timestamp_migration(cursor)
+
+    assert cursor.statements[1][0] == (
+        "ALTER TABLE grupos CHANGE COLUMN updated_at atualizado_em "
+        "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP "
+        "ON UPDATE CURRENT_TIMESTAMP"
+    )
+
+
+def test_schema_varchar_width_migration_widens_legacy_columns():
+    cursor = FakeCursor(
+        columns={
+            "usuarios": {"email": "varchar(180)"},
+            "despesas": {"descricao": "varchar(180)"},
+            "categorias": {"nome": "varchar(80)"},
+            "notificacoes": {"titulo": "varchar(120)"},
+        }
+    )
+
+    _apply_schema_varchar_width_migrations(cursor)
+
+    statements = [
+        statement
+        for statement, _ in cursor.statements
+        if statement.startswith("ALTER TABLE")
+    ]
+    assert statements == [
+        "ALTER TABLE `usuarios` MODIFY COLUMN `email` VARCHAR(255) NOT NULL",
+        "ALTER TABLE `despesas` MODIFY COLUMN `descricao` VARCHAR(255) NOT NULL",
+        "ALTER TABLE `categorias` MODIFY COLUMN `nome` VARCHAR(100) NOT NULL",
+        "ALTER TABLE `notificacoes` MODIFY COLUMN `titulo` VARCHAR(150) NOT NULL",
+    ]
+
+
+def test_user_avatar_migration_adds_avatar_storage():
+    cursor = FakeCursor(columns={"usuarios": {"id": "bigint unsigned"}})
+
+    _apply_user_avatar_migration(cursor)
+
+    assert cursor.statements[1][0] == (
+        "ALTER TABLE usuarios ADD COLUMN avatar_url MEDIUMTEXT NULL"
+    )
+
+
+def test_user_avatar_migration_preserves_existing_storage():
+    cursor = FakeCursor(
+        columns={
+            "usuarios": {
+                "id": "bigint unsigned",
+                "avatar_url": "mediumtext",
+            }
+        }
+    )
+
+    _apply_user_avatar_migration(cursor)
+
+    assert len(cursor.statements) == 1
+
+
+def test_user_pix_key_migration_adds_optional_key_storage():
+    cursor = FakeCursor(columns={"usuarios": {"id": "bigint unsigned"}})
+
+    _apply_user_pix_key_migration(cursor)
+
+    assert cursor.statements[1][0] == (
+        "ALTER TABLE usuarios ADD COLUMN pix_chave VARCHAR(77) NULL"
+    )
+
+
+def test_user_pix_key_migration_preserves_existing_key_storage():
+    cursor = FakeCursor(
+        columns={
+            "usuarios": {
+                "id": "bigint unsigned",
+                "pix_chave": "varchar(77)",
+            }
+        }
+    )
+
+    _apply_user_pix_key_migration(cursor)
+
+    assert len(cursor.statements) == 1
+
+
 def test_notification_preferences_migration_adds_disabled_defaults():
     cursor = FakeCursor(columns={"usuarios": {"id": "bigint unsigned"}})
 
@@ -296,6 +648,14 @@ def test_notification_preferences_migration_adds_disabled_defaults():
         "ALTER TABLE usuarios ADD COLUMN sons_notificacoes_ativos "
         "TINYINT(1) NOT NULL DEFAULT 1"
     )
+    assert cursor.statements[3][0] == (
+        "ALTER TABLE usuarios ADD COLUMN notificacoes_despesas_ativas "
+        "TINYINT(1) NOT NULL DEFAULT 1"
+    )
+    assert cursor.statements[4][0] == (
+        "ALTER TABLE usuarios ADD COLUMN notificacoes_cobrancas_ativas "
+        "TINYINT(1) NOT NULL DEFAULT 1"
+    )
 
 
 def test_notification_preferences_migration_preserves_existing_columns():
@@ -305,11 +665,72 @@ def test_notification_preferences_migration_preserves_existing_columns():
                 "id": "bigint unsigned",
                 "notificacoes_ativas": "tinyint(1)",
                 "sons_notificacoes_ativos": "tinyint(1)",
+                "notificacoes_despesas_ativas": "tinyint(1)",
+                "notificacoes_cobrancas_ativas": "tinyint(1)",
             }
         }
     )
 
     _apply_notification_preferences_migration(cursor)
+
+    assert len(cursor.statements) == 1
+
+
+def test_notification_reference_migration_adds_optional_reference():
+    cursor = FakeCursor(columns={"notificacoes": {"id": "bigint unsigned"}})
+
+    _apply_notification_reference_migration(cursor)
+
+    assert cursor.statements[1][0] == (
+        "ALTER TABLE notificacoes ADD COLUMN referencia_id "
+        "BIGINT UNSIGNED NULL"
+    )
+
+
+def test_notification_reference_migration_preserves_existing_reference():
+    cursor = FakeCursor(
+        columns={
+            "notificacoes": {
+                "id": "bigint unsigned",
+                "referencia_id": "bigint unsigned",
+            }
+        }
+    )
+
+    _apply_notification_reference_migration(cursor)
+
+    assert len(cursor.statements) == 1
+
+
+def test_notification_timestamp_migration_renames_legacy_created_at():
+    cursor = FakeCursor(
+        columns={
+            "notificacoes": {
+                "id": "bigint unsigned",
+                "created_at": "datetime",
+            }
+        }
+    )
+
+    _apply_notification_timestamp_migration(cursor)
+
+    assert cursor.statements[1][0] == (
+        "ALTER TABLE notificacoes CHANGE COLUMN created_at criado_em "
+        "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP"
+    )
+
+
+def test_notification_timestamp_migration_preserves_canonical_column():
+    cursor = FakeCursor(
+        columns={
+            "notificacoes": {
+                "id": "bigint unsigned",
+                "criado_em": "datetime",
+            }
+        }
+    )
+
+    _apply_notification_timestamp_migration(cursor)
 
     assert len(cursor.statements) == 1
 
@@ -451,6 +872,93 @@ def test_push_outbox_retention_migration_preserves_existing_index():
     _apply_push_outbox_retention_migration(cursor)
 
     assert cursor.statements == [("SHOW INDEX FROM `push_outbox`", None)]
+
+
+def test_gemini_usage_user_index_migration_adds_index():
+    cursor = FakeCursor(indexes={"gemini_usage_diaria": []})
+
+    _apply_gemini_usage_user_index_migration(cursor)
+
+    assert cursor.statements == [
+        ("SHOW INDEX FROM `gemini_usage_diaria`", None),
+        (
+            "CREATE INDEX idx_gemini_usage_user_date "
+            "ON gemini_usage_diaria (usuario_id, data_utc)",
+            None,
+        ),
+    ]
+
+
+def test_gemini_usage_user_index_migration_preserves_existing_index():
+    cursor = FakeCursor(
+        indexes={
+            "gemini_usage_diaria": [
+                (1, 0, "idx_custom_user_date", 1, "usuario_id"),
+                (1, 0, "idx_custom_user_date", 2, "data_utc"),
+            ]
+        }
+    )
+
+    _apply_gemini_usage_user_index_migration(cursor)
+
+    assert cursor.statements == [("SHOW INDEX FROM `gemini_usage_diaria`", None)]
+
+
+def test_payment_idempotency_migration_adds_column_and_unique_index():
+    cursor = FakeCursor(
+        columns={
+            "pagamentos": {
+                "id": "bigint",
+                "grupo_id": "bigint",
+                "pagador_id": "bigint",
+            }
+        },
+        indexes={"pagamentos": []},
+    )
+
+    _apply_payment_idempotency_migration(cursor)
+
+    assert cursor.statements == [
+        ("SHOW COLUMNS FROM `pagamentos`", None),
+        (
+            "ALTER TABLE pagamentos ADD COLUMN idempotency_key "
+            "VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NULL",
+            None,
+        ),
+        ("SHOW INDEX FROM `pagamentos`", None),
+        (
+            "CREATE UNIQUE INDEX uq_pagamentos_idempotencia "
+            "ON pagamentos (grupo_id, pagador_id, idempotency_key)",
+            None,
+        ),
+    ]
+
+
+def test_payment_idempotency_migration_preserves_existing_column_and_index():
+    cursor = FakeCursor(
+        columns={
+            "pagamentos": {
+                "id": "bigint",
+                "grupo_id": "bigint",
+                "pagador_id": "bigint",
+                "idempotency_key": "varchar(64)",
+            }
+        },
+        indexes={
+            "pagamentos": [
+                (1, 0, "uq_custom_idempotency", 1, "grupo_id"),
+                (1, 0, "uq_custom_idempotency", 2, "pagador_id"),
+                (1, 0, "uq_custom_idempotency", 3, "idempotency_key"),
+            ]
+        },
+    )
+
+    _apply_payment_idempotency_migration(cursor)
+
+    assert cursor.statements == [
+        ("SHOW COLUMNS FROM `pagamentos`", None),
+        ("SHOW INDEX FROM `pagamentos`", None),
+    ]
 
 
 def test_participantes_migration_maps_legacy_fields():

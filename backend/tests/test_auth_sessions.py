@@ -111,14 +111,10 @@ def test_refresh_rotaciona_token_e_rejeita_reutilizacao(client):
     ).status_code == 200
 
 
-def test_login_migra_hash_sha256_legado_para_bcrypt_sem_invalidar_sessao(client):
+def test_login_rejeita_hash_sha256_e_migracao_exige_reset_de_senha(client):
     email = "legacy-password-login@example.com"
     password = "SenhaSegura123!"
-    cadastrar = client.post(
-        "/api/auth/cadastro",
-        json={"nome": "Conta legada", "email": email, "senha": password},
-    )
-    assert cadastrar.status_code == 201
+    sessao = criar_sessao(client, email)
 
     legacy_hash = hashlib.sha256(password.encode("utf-8")).hexdigest()
     with get_connection_context() as connection:
@@ -137,25 +133,74 @@ def test_login_migra_hash_sha256_legado_para_bcrypt_sem_invalidar_sessao(client)
         json={"email": email, "senha": password},
     )
 
-    assert resposta.status_code == 200
-    sessao = resposta.get_json()["data"]
+    assert resposta.status_code == 401
+    dry_run = app.test_cli_runner().invoke(
+        args=["invalidate-legacy-passwords"]
+    )
+    assert dry_run.exit_code == 0
+    assert "Dry-run: 1 conta(s)" in dry_run.output
     with get_connection_context() as connection:
         cursor = cursor_for(connection)
         try:
             cursor.execute(
-                "SELECT senha, auth_version FROM usuarios WHERE email = ?",
+                "SELECT senha FROM usuarios WHERE email = ?",
+                (email,),
+            )
+            assert cursor.fetchone()["senha"] == legacy_hash
+        finally:
+            cursor.close()
+
+    resultado = app.test_cli_runner().invoke(
+        args=["invalidate-legacy-passwords", "--apply"]
+    )
+    assert resultado.exit_code == 0
+    assert "1 conta(s) atualizada(s)" in resultado.output
+
+    with get_connection_context() as connection:
+        cursor = cursor_for(connection)
+        try:
+            cursor.execute(
+                "SELECT id, senha, auth_version FROM usuarios WHERE email = ?",
                 (email,),
             )
             usuario = cursor.fetchone()
+            cursor.execute(
+                "SELECT COUNT(*) AS total FROM refresh_tokens "
+                "WHERE usuario_id = ? AND revogado_em IS NULL",
+                (usuario["id"],),
+            )
+            sessoes_ativas = cursor.fetchone()["total"]
         finally:
             cursor.close()
 
     assert usuario["senha"] != legacy_hash
-    assert check_password(password, usuario["senha"]) is True
-    assert usuario["auth_version"] == 0
+    assert check_password(password, usuario["senha"]) is False
+    assert usuario["auth_version"] == 1
+    assert sessoes_ativas == 0
     assert client.get(
         "/api/auth/me",
         headers=cabecalho_autorizacao(sessao["token"]),
+    ).status_code == 401
+    assert client.post(
+        "/api/auth/refresh",
+        json={"refresh_token": sessao["refresh_token"]},
+    ).status_code == 401
+
+    token_reset = client.post(
+        "/api/auth/esqueci-senha",
+        json={"email": email},
+    ).get_json()["data"]["token_teste"]
+    redefinir = client.post(
+        "/api/auth/redefinir-senha",
+        json={
+            "token": token_reset,
+            "nova_senha": "NovaSenhaSegura456!",
+        },
+    )
+    assert redefinir.status_code == 200
+    assert client.post(
+        "/api/auth/login",
+        json={"email": email, "senha": "NovaSenhaSegura456!"},
     ).status_code == 200
 
 
@@ -327,7 +372,7 @@ def test_alias_de_recuperacao_nao_expoe_token_fora_de_testes(
         "development",
     )
     monkeypatch.setattr(
-        "controllers.auth_controller.EmailService.enviar_recuperacao_senha",
+        "controllers.auth_controller.EmailService.agendar_recuperacao_senha",
         staticmethod(lambda *_: True),
     )
 
@@ -335,6 +380,39 @@ def test_alias_de_recuperacao_nao_expoe_token_fora_de_testes(
 
     assert resposta.status_code == 200
     assert "token_teste" not in resposta.get_json().get("data", {})
+
+
+def test_recuperacao_mantem_resposta_generica_quando_agendamento_falha(
+    client, monkeypatch
+):
+    email = "recovery-generic-response@example.com"
+    criar_sessao(client, email)
+    monkeypatch.setattr(
+        "controllers.auth_controller.Config.ENVIRONMENT",
+        "development",
+    )
+    agendamentos = []
+    monkeypatch.setattr(
+        "controllers.auth_controller.EmailService.agendar_recuperacao_senha",
+        staticmethod(
+            lambda *args: agendamentos.append(args) or False
+        ),
+    )
+
+    resposta_conta_existente = client.post(
+        "/api/auth/esqueci-senha", json={"email": email}
+    )
+    resposta_conta_ausente = client.post(
+        "/api/auth/esqueci-senha",
+        json={"email": "missing-recovery-account@example.com"},
+    )
+
+    assert resposta_conta_existente.status_code == 200
+    assert resposta_conta_ausente.status_code == 200
+    assert resposta_conta_existente.get_json() == resposta_conta_ausente.get_json()
+    assert "token_teste" not in resposta_conta_existente.get_json().get("data", {})
+    assert len(agendamentos) == 1
+    assert agendamentos[0][2] == email
 
 
 def test_aliases_de_recuperacao_compartilham_limite_de_solicitacao(client):

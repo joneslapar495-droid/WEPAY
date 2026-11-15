@@ -1,7 +1,8 @@
+import { useAppTheme } from "@/hooks/useAppTheme";
+import type { PaletaSemantica } from "@/constants/Cores";
 import React, { useCallback, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -14,6 +15,7 @@ import { despesasGrupoApi } from "@/services/api";
 import type { DespesaGrupo } from "@/types/api";
 import { formatDateForDisplay } from "@/utils/financeInput";
 import { formatCurrencyBRL } from "@/utils/financeFormat";
+import { Alert } from "@/services/feedback";
 
 const nomesDivisao = {
   igual: "Divisão igual",
@@ -22,6 +24,8 @@ const nomesDivisao = {
 } as const;
 
 export default function DetalhesDespesa() {
+  const Cores = useAppTheme();
+  const styles = createStyles(Cores);
   const { id, groupId, grupoNome } = useLocalSearchParams<{
     id?: string;
     groupId?: string;
@@ -106,7 +110,7 @@ export default function DetalhesDespesa() {
   if (carregando) {
     return (
       <SafeAreaView style={styles.centralizado}>
-        <ActivityIndicator color="#00A17A" size="large" />
+        <ActivityIndicator color={Cores.textoPositivo} size="large" />
         <Text style={styles.textoAjuda}>Carregando despesa...</Text>
       </SafeAreaView>
     );
@@ -200,34 +204,34 @@ export default function DetalhesDespesa() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#F5FBF7" },
-  centralizado: { flex: 1, backgroundColor: "#F5FBF7", alignItems: "center", justifyContent: "center", padding: 24, gap: 16 },
+const createStyles = (Cores: PaletaSemantica) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: Cores.fundo },
+  centralizado: { flex: 1, backgroundColor: Cores.fundo, alignItems: "center", justifyContent: "center", padding: 24, gap: 16 },
   conteudo: { padding: 20, paddingBottom: 40 },
   cabecalho: { flexDirection: "row", alignItems: "center", marginBottom: 24 },
-  botaoVoltar: { width: 42, height: 42, borderRadius: 21, backgroundColor: "#FFF", alignItems: "center", justifyContent: "center" },
-  voltar: { fontSize: 34, lineHeight: 36, color: "#0B3B33" },
-  titulo: { flex: 1, textAlign: "center", color: "#0B3B33", fontSize: 18, fontWeight: "700" },
+  botaoVoltar: { width: 42, height: 42, borderRadius: 21, backgroundColor: Cores.cartaoFundo, alignItems: "center", justifyContent: "center" },
+  voltar: { fontSize: 34, lineHeight: 36, color: Cores.texto },
+  titulo: { flex: 1, textAlign: "center", color: Cores.texto, fontSize: 18, fontWeight: "700" },
   espacador: { width: 42 },
-  resumo: { alignItems: "center", backgroundColor: "#FFF", borderRadius: 20, padding: 24, borderWidth: 1, borderColor: "#E1EEE8" },
-  descricao: { color: "#0B3B33", fontSize: 24, fontWeight: "700", textAlign: "center" },
-  valor: { color: "#0B3B33", fontSize: 30, fontWeight: "800", marginVertical: 10 },
-  categoria: { color: "#00A17A", backgroundColor: "#E9F9F3", overflow: "hidden", borderRadius: 14, paddingHorizontal: 12, paddingVertical: 5, fontWeight: "700" },
-  observacao: { color: "#45675F", fontSize: 14, marginTop: 12, textAlign: "center" },
-  cartao: { marginTop: 18, backgroundColor: "#FFF", borderRadius: 16, padding: 16, borderWidth: 1, borderColor: "#E1EEE8" },
-  rotulo: { color: "#6B8F86", fontSize: 12, marginBottom: 4 },
-  destaque: { color: "#0B3B33", fontSize: 16, fontWeight: "700" },
-  linha: { height: 1, backgroundColor: "#E1EEE8", marginVertical: 14 },
-  subtitulo: { color: "#0B3B33", fontSize: 18, fontWeight: "700", marginTop: 26 },
+  resumo: { alignItems: "center", backgroundColor: Cores.cartaoFundo, borderRadius: 20, padding: 24, borderWidth: 1, borderColor: Cores.borda },
+  descricao: { color: Cores.texto, fontSize: 24, fontWeight: "700", textAlign: "center" },
+  valor: { color: Cores.texto, fontSize: 30, fontWeight: "800", marginVertical: 10 },
+  categoria: { color: Cores.textoPositivo, backgroundColor: Cores.superficieMintPale, overflow: "hidden", borderRadius: 14, paddingHorizontal: 12, paddingVertical: 5, fontWeight: "700" },
+  observacao: { color: Cores.textoSecundarioProfundo, fontSize: 14, marginTop: 12, textAlign: "center" },
+  cartao: { marginTop: 18, backgroundColor: Cores.cartaoFundo, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: Cores.borda },
+  rotulo: { color: Cores.textoSuave, fontSize: 12, marginBottom: 4 },
+  destaque: { color: Cores.texto, fontSize: 16, fontWeight: "700" },
+  linha: { height: 1, backgroundColor: Cores.superficieBorda, marginVertical: 14 },
+  subtitulo: { color: Cores.texto, fontSize: 18, fontWeight: "700", marginTop: 26 },
   participante: { flexDirection: "row", alignItems: "center" },
-  avatar: { width: 40, height: 40, borderRadius: 20, backgroundColor: "#DDF6ED", alignItems: "center", justifyContent: "center", marginRight: 12 },
-  avatarTexto: { color: "#0B3B33", fontWeight: "800" },
+  avatar: { width: 40, height: 40, borderRadius: 20, backgroundColor: Cores.superficieAvatar, alignItems: "center", justifyContent: "center", marginRight: 12 },
+  avatarTexto: { color: Cores.texto, fontWeight: "800" },
   participanteInfo: { flex: 1 },
-  valorParticipante: { color: "#00A17A", fontSize: 15, fontWeight: "800" },
-  textoAjuda: { color: "#6B8F86", fontSize: 13 },
-  tituloVazio: { color: "#0B3B33", fontWeight: "700", fontSize: 18 },
-  botaoPrincipal: { marginTop: 26, minHeight: 52, backgroundColor: "#00A17A", borderRadius: 14, alignItems: "center", justifyContent: "center", paddingHorizontal: 16 },
-  botaoPrincipalTexto: { color: "#FFF", fontWeight: "800", fontSize: 15 },
-  botaoExcluir: { marginTop: 10, minHeight: 52, borderWidth: 1, borderColor: "#E85D5D", borderRadius: 14, alignItems: "center", justifyContent: "center" },
-  botaoExcluirTexto: { color: "#E85D5D", fontWeight: "700", fontSize: 15 },
+  valorParticipante: { color: Cores.textoPositivo, fontSize: 15, fontWeight: "800" },
+  textoAjuda: { color: Cores.textoSuave, fontSize: 13 },
+  tituloVazio: { color: Cores.texto, fontWeight: "700", fontSize: 18 },
+  botaoPrincipal: { marginTop: 26, minHeight: 52, backgroundColor: Cores.principalEscuro, borderRadius: 14, alignItems: "center", justifyContent: "center", paddingHorizontal: 16 },
+  botaoPrincipalTexto: { color: Cores.textoSobreMarca, fontWeight: "800", fontSize: 15 },
+  botaoExcluir: { marginTop: 10, minHeight: 52, borderWidth: 1, borderColor: Cores.bordaErroForte, borderRadius: 14, alignItems: "center", justifyContent: "center" },
+  botaoExcluirTexto: { color: Cores.textoNegativoClaro, fontWeight: "700", fontSize: 15 },
 });

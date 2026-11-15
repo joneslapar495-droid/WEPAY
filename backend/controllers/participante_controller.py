@@ -62,7 +62,11 @@ class ParticipanteController:
                     "Apenas administradores podem adicionar participantes.",
                     status=403,
                 )
-            ParticipanteModel.adicionar(grupo_id, usuario_id, conn=conn)
+            try:
+                ParticipanteModel.adicionar(grupo_id, usuario_id, conn=conn)
+            except ValueError as exc:
+                conn.rollback()
+                return ResponseUtils.erro(str(exc))
             conn.commit()
         return ResponseUtils.sucesso(mensagem="Participante adicionado.", status=201)
 
@@ -355,6 +359,9 @@ class ParticipanteController:
                 )
                 conn.commit()
                 return ResponseUtils.sucesso(mensagem="Voce entrou no grupo.")
+            except ValueError as exc:
+                conn.rollback()
+                return ResponseUtils.erro(str(exc), status=400)
             except Exception:
                 conn.rollback()
                 raise

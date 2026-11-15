@@ -1,3 +1,6 @@
+import base64
+import hashlib
+import hmac
 import os
 from pathlib import Path
 
@@ -27,6 +30,42 @@ for _key, _value in dotenv_values(ENV_FILE).items():
         os.environ.setdefault(_key, _value)
 
 
+def _validate_production_database_credentials(user: str, password: str) -> None:
+    if not user.strip() or user.strip().lower() == "root":
+        raise RuntimeError(
+            "DB_USER deve ser uma conta dedicada e com privilégios mínimos em produção."
+        )
+    if not password.strip():
+        raise RuntimeError(
+            "DB_PASSWORD deve ser configurada para o banco em produção."
+        )
+
+
+def _validate_production_database_tls(ca_path: str) -> str:
+    if not ca_path.strip():
+        raise RuntimeError(
+            "DB_SSL_CA deve apontar para o certificado CA do MySQL em produção."
+        )
+    if not Path(ca_path).is_file():
+        raise RuntimeError(
+            "DB_SSL_CA deve apontar para um arquivo CA existente em produção."
+        )
+    return ca_path
+
+
+def _validate_database_name_for_environment(
+    environment: str,
+    database_name: str,
+) -> None:
+    if (
+        environment != "testing"
+        and database_name.strip().lower() == "wepay_test"
+    ):
+        raise RuntimeError(
+            "DB_NAME=wepay_test é reservado aos testes do backend."
+        )
+
+
 class Config:
     """Configuração única do backend WEPAY."""
 
@@ -37,6 +76,8 @@ class Config:
     DB_USER = os.getenv("DB_USER", "root")
     DB_PASSWORD = os.getenv("DB_PASSWORD", "")
     DB_NAME = os.getenv("DB_NAME", "wepay_db")
+    _validate_database_name_for_environment(ENVIRONMENT, DB_NAME)
+    DB_SSL_CA = os.getenv("DB_SSL_CA", "").strip()
     DB_POOL_SIZE = int(os.getenv("DB_POOL_SIZE", "5"))
     if not 1 <= DB_POOL_SIZE <= 32:
         raise RuntimeError("DB_POOL_SIZE deve estar entre 1 e 32.")
@@ -54,6 +95,25 @@ class Config:
         )
     if not SECRET_KEY:
         SECRET_KEY = "development-only-change-this-secret"
+    if ENVIRONMENT == "production":
+        _validate_production_database_credentials(DB_USER, DB_PASSWORD)
+        DB_SSL_CA = _validate_production_database_tls(DB_SSL_CA)
+
+    EMAIL_OUTBOX_ENCRYPTION_KEY = os.getenv(
+        "EMAIL_OUTBOX_ENCRYPTION_KEY", ""
+    ).strip()
+    if ENVIRONMENT == "production" and not EMAIL_OUTBOX_ENCRYPTION_KEY:
+        raise RuntimeError(
+            "EMAIL_OUTBOX_ENCRYPTION_KEY deve ser configurada em produção."
+        )
+    if not EMAIL_OUTBOX_ENCRYPTION_KEY:
+        EMAIL_OUTBOX_ENCRYPTION_KEY = base64.urlsafe_b64encode(
+            hmac.new(
+                SECRET_KEY.encode("utf-8"),
+                b"wepay-password-reset-outbox-v1",
+                hashlib.sha256,
+            ).digest()
+        ).decode("ascii")
 
     JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
     JWT_ACCESS_TOKEN_EXPIRES_MINUTES = int(
@@ -130,11 +190,11 @@ class Config:
         raise RuntimeError(
             "Cookies SameSite=None exigem AUTH_REFRESH_COOKIE_SECURE=true."
         )
-
     EMAIL_REMETENTE = os.getenv("EMAIL_REMETENTE", "")
     EMAIL_SENHA_APP = os.getenv("EMAIL_SENHA_APP", "")
     EMAIL_SERVER = os.getenv("EMAIL_SERVER", "smtp.gmail.com")
     EMAIL_PORT = int(os.getenv("EMAIL_PORT", "465"))
+    PASSWORD_RESET_URL = os.getenv("PASSWORD_RESET_URL", "").strip()
     FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:8081")
     ALLOW_EMAIL_TEST = os.getenv("ALLOW_EMAIL_TEST", "false").lower() == "true"
 
@@ -153,5 +213,9 @@ class Config:
         )
 
     GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
-    GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+    GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.5-flash")
+    GEMINI_FALLBACK_MODEL = os.getenv(
+        "GEMINI_FALLBACK_MODEL",
+        "gemini-3.5-flash",
+    )
     EXPO_ACCESS_TOKEN = os.getenv("EXPO_ACCESS_TOKEN", "")

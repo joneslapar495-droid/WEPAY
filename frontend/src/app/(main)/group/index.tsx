@@ -1,7 +1,8 @@
+import { useAppTheme } from "@/hooks/useAppTheme";
+import type { PaletaSemantica } from "@/constants/Cores";
 import React, { useCallback, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   FlatList,
   RefreshControl,
   SafeAreaView,
@@ -13,22 +14,12 @@ import {
 } from "react-native";
 import { router, useFocusEffect } from "expo-router";
 import { gruposApi, Grupo } from "@/services/api";
+import { Alert } from "@/services/feedback";
 import type { Paginacao } from "@/types/api";
 import {
   appendUniqueById,
   createPaginationRequestGate,
 } from "@/utils/paginationRequestGate";
-
-const CORES = {
-  paper: "#F5FBF7",
-  ink: "#0B3B33",
-  surface: "#FFFFFF",
-  accent: "#00C896",
-  accentDark: "#00A17A",
-  muted: "#6B8F86",
-  line: "#E1EEE8",
-  field: "#F0F8F4",
-};
 
 function iniciais(nome: string) {
   return nome
@@ -41,6 +32,8 @@ function iniciais(nome: string) {
 }
 
 export default function ListaGrupos() {
+  const CORES = useAppTheme();
+  const styles = createStyles(CORES);
   const [grupos, setGrupos] = useState<Grupo[]>([]);
   const [busca, setBusca] = useState("");
   const [carregando, setCarregando] = useState(true);
@@ -321,7 +314,7 @@ export default function ListaGrupos() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (CORES: PaletaSemantica) => StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: CORES.paper,
@@ -427,7 +420,7 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 15,
-    backgroundColor: "#DDF7EE",
+    backgroundColor: CORES.superficieVerdeSelecionada,
     justifyContent: "center",
     alignItems: "center",
     marginLeft: 12,
@@ -520,7 +513,7 @@ const styles = StyleSheet.create({
     width: 46,
     height: 46,
     borderRadius: 14,
-    backgroundColor: "#DDF7EE",
+    backgroundColor: CORES.superficieVerdeSelecionada,
     justifyContent: "center",
     alignItems: "center",
   },

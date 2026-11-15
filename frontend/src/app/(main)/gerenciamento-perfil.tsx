@@ -1,3 +1,5 @@
+import { useAppTheme } from "@/hooks/useAppTheme";
+import type { PaletaSemantica } from "@/constants/Cores";
 /**
  * ============================================================
  * WEPAY - GERENCIAMENTO DE PERFIL
@@ -8,7 +10,6 @@
  * - visualizar seus dados;
  * - alterar nome;
  * - alterar e-mail;
- * - alterar telefone;
  * - salvar alterações;
  * - acessar a alteração de senha;
  * - sair da conta.
@@ -51,7 +52,8 @@ import React, { useState } from "react";
  * Componentes básicos do React Native.
  */
 import {
-  Alert,
+  ActivityIndicator,
+  Image,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -74,8 +76,10 @@ import { SafeAreaView } from "react-native-safe-area-context";
  * Expo Router permite navegar entre as telas.
  */
 import { router } from "expo-router";
+import * as ImagePicker from "expo-image-picker";
 import { useUsuario } from "@/contexts/UsuarioContext";
 import { authApi } from "@/services/api";
+import { Alert } from "@/services/feedback";
 
 
 /**
@@ -84,12 +88,15 @@ import { authApi } from "@/services/api";
 ============================================================ */
 
 export default function GerenciamentoPerfilScreen() {
+  const Cores = useAppTheme();
+  const styles = createStyles(Cores);
   const { usuario, atualizarPerfil, logout } = useUsuario();
   const usuarioAtual = usuario ?? {
     id: "",
     nome: "",
     email: "",
     telefone: "",
+    pixChave: "",
     iniciais: "",
     saldoTotal: 0,
   };
@@ -112,11 +119,8 @@ export default function GerenciamentoPerfilScreen() {
     useState(usuarioAtual.email);
 
 
-  /**
-   * Telefone do usuário.
-   */
-  const [telefone, setTelefone] =
-    useState(usuarioAtual.telefone);
+  const [chavePix, setChavePix] =
+    useState(usuarioAtual.pixChave ?? "");
 
 
   /**
@@ -124,6 +128,8 @@ export default function GerenciamentoPerfilScreen() {
    * "Salvar alterações".
    */
   const [salvando, setSalvando] =
+    useState(false);
+  const [alterandoFoto, setAlterandoFoto] =
     useState(false);
 
 
@@ -139,6 +145,60 @@ export default function GerenciamentoPerfilScreen() {
 
     return /\S+@\S+\.\S+/.test(valor);
 
+  }
+
+  async function selecionarFotoPerfil() {
+    if (alterandoFoto) return;
+    setAlterandoFoto(true);
+
+    try {
+      if (Platform.OS !== "web") {
+        const permissao =
+          await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (!permissao.granted) {
+          Alert.alert(
+            "Permissão necessária",
+            "Permita o acesso às fotos para escolher uma imagem de perfil.",
+          );
+          return;
+        }
+      }
+
+      const resultado = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ["images"],
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.7,
+        base64: true,
+      });
+      if (resultado.canceled || !resultado.assets[0]) return;
+
+      const imagemBase64 = resultado.assets[0].base64;
+      if (!imagemBase64) {
+        Alert.alert(
+          "Foto inválida",
+          "Não foi possível ler a imagem selecionada. Escolha outra foto.",
+        );
+        return;
+      }
+
+      try {
+        const resposta = await authApi.atualizarAvatar(imagemBase64);
+        atualizarPerfil({ avatarUrl: resposta.data.avatar_url });
+      } catch {
+        // A camada da API já exibe o erro de operações CRUD.
+        return;
+      }
+    } catch (erro) {
+      Alert.alert(
+        "Foto não atualizada",
+        erro instanceof Error
+          ? erro.message
+          : "Não foi possível salvar sua foto de perfil.",
+      );
+    } finally {
+      setAlterandoFoto(false);
+    }
   }
 
 
@@ -159,6 +219,7 @@ export default function GerenciamentoPerfilScreen() {
      * Remove espaços desnecessários do e-mail.
      */
     const emailLimpo = email.trim();
+    const chavePixLimpa = chavePix.trim();
 
 
     /**
@@ -220,6 +281,14 @@ export default function GerenciamentoPerfilScreen() {
       return;
     }
 
+    if (chavePixLimpa.length > 77) {
+      Alert.alert(
+        "Chave Pix inválida",
+        "A chave Pix deve ter no máximo 77 caracteres.",
+      );
+      return;
+    }
+
 
     /**
      * ========================================================
@@ -237,13 +306,13 @@ export default function GerenciamentoPerfilScreen() {
       await authApi.atualizarPerfil({
         nome: nomeLimpo,
         email: emailLimpo,
-        telefone: telefone.trim(),
+        telefone: usuarioAtual.telefone,
+        pix_chave: chavePixLimpa || null,
       });
-
       atualizarPerfil({
         nome: nomeLimpo,
         email: emailLimpo,
-        telefone: telefone.trim(),
+        pixChave: chavePixLimpa,
       });
 
 
@@ -425,7 +494,6 @@ export default function GerenciamentoPerfilScreen() {
 
           </View>
 
-
           {/* =================================================
               PERFIL / AVATAR
           ================================================== */}
@@ -438,9 +506,17 @@ export default function GerenciamentoPerfilScreen() {
 
             <View style={styles.profileAvatar}>
 
-              <Text style={styles.profileAvatarText}>
-                {usuarioAtual.iniciais}
-              </Text>
+              {usuarioAtual.avatarUrl ? (
+                <Image
+                  accessibilityLabel="Foto de perfil"
+                  source={{ uri: usuarioAtual.avatarUrl }}
+                  style={styles.profileAvatarImage}
+                />
+              ) : (
+                <Text style={styles.profileAvatarText}>
+                  {usuarioAtual.iniciais || "?"}
+                </Text>
+              )}
 
             </View>
 
@@ -468,19 +544,22 @@ export default function GerenciamentoPerfilScreen() {
             -------------------------------------------------- */}
 
             <TouchableOpacity
-              style={styles.photoButton}
+              style={[
+                styles.photoButton,
+                alterandoFoto && styles.photoButtonDisabled,
+              ]}
+              disabled={alterandoFoto}
               activeOpacity={0.7}
-              onPress={() =>
-                Alert.alert(
-                  "Foto de perfil",
-                  "A alteração da foto será implementada posteriormente."
-                )
-              }
+              onPress={() => void selecionarFotoPerfil()}
             >
 
-              <Text style={styles.photoButtonText}>
-                Alterar foto
-              </Text>
+              {alterandoFoto ? (
+                <ActivityIndicator size="small" color={Cores.textoPositivo} />
+              ) : (
+                <Text style={styles.photoButtonText}>
+                  {usuarioAtual.avatarUrl ? "Alterar foto" : "Adicionar foto"}
+                </Text>
+              )}
 
             </TouchableOpacity>
 
@@ -524,7 +603,7 @@ export default function GerenciamentoPerfilScreen() {
                 onChangeText={setNome}
 
                 placeholder="Digite seu nome"
-                placeholderTextColor="#6B8F86"
+                placeholderTextColor={Cores.textoSuave}
 
                 /**
                  * Como o nome é textual,
@@ -558,7 +637,7 @@ export default function GerenciamentoPerfilScreen() {
 
                 placeholder="seu@email.com"
 
-                placeholderTextColor="#6B8F86"
+                placeholderTextColor={Cores.textoSuave}
 
                 /**
                  * Teclado apropriado para e-mail.
@@ -577,39 +656,21 @@ export default function GerenciamentoPerfilScreen() {
             </View>
 
 
-            {/* -------------------------------------------------
-                TELEFONE
-            -------------------------------------------------- */}
-
             <View style={styles.field}>
-
-              <Text style={styles.label}>
-                Telefone
-              </Text>
-
-
+              <Text style={styles.label}>Chave Pix para receber</Text>
               <TextInput
                 style={styles.input}
-
-                value={telefone}
-
-                onChangeText={setTelefone}
-
-                placeholder="(00) 00000-0000"
-
-                placeholderTextColor="#6B8F86"
-
-                keyboardType="phone-pad"
-
-                /**
-                 * Não aplicamos máscara automática aqui.
-                 *
-                 * A máscara pode ser adicionada posteriormente
-                 * em utils/mask.ts, caso você mantenha essa
-                 * pasta na evolução da arquitetura.
-                 */
+                value={chavePix}
+                onChangeText={setChavePix}
+                placeholder="Digite sua chave Pix"
+                placeholderTextColor={Cores.textoSuave}
+                autoCapitalize="none"
+                autoCorrect={false}
+                maxLength={77}
               />
-
+              <Text style={styles.helperText}>
+                Opcional. Será mostrada apenas a quem deve a você em um grupo.
+              </Text>
             </View>
 
 
@@ -720,7 +781,7 @@ export default function GerenciamentoPerfilScreen() {
               onPress={() => router.push("/(main)/configuracoes")}
               activeOpacity={0.7}
             >
-              <View style={[styles.optionIcon, { backgroundColor: "#00C896" }]}>
+              <View style={[styles.optionIcon, { backgroundColor: Cores.principal }]}>
                 <Text style={styles.optionIconText}>⚙️</Text>
               </View>
 
@@ -817,7 +878,7 @@ export default function GerenciamentoPerfilScreen() {
    STYLE SHEET
 ============================================================ */
 
-const styles = StyleSheet.create({
+const createStyles = (Cores: PaletaSemantica) => StyleSheet.create({
 
   /* ==========================================================
      CONTAINER PRINCIPAL
@@ -825,7 +886,7 @@ const styles = StyleSheet.create({
 
   container: {
     flex: 1,
-    backgroundColor: "#F5FBF7",
+    backgroundColor: Cores.fundo,
   },
 
 
@@ -836,7 +897,7 @@ const styles = StyleSheet.create({
 
   screen: {
     flex: 1,
-    backgroundColor: "#F5FBF7",
+    backgroundColor: Cores.fundo,
   },
 
 
@@ -869,18 +930,18 @@ const styles = StyleSheet.create({
 
     borderRadius: 12,
 
-    backgroundColor: "#FFFFFF",
+    backgroundColor: Cores.cartaoFundo,
 
     justifyContent: "center",
     alignItems: "center",
 
     borderWidth: 1,
-    borderColor: "#E1EEE8",
+    borderColor: Cores.borda,
   },
 
 
   backText: {
-    color: "#0B3B33",
+    color: Cores.texto,
 
     fontSize: 28,
 
@@ -904,7 +965,7 @@ const styles = StyleSheet.create({
 
     fontWeight: "700",
 
-    color: "#0B3B33",
+    color: Cores.texto,
   },
 
 
@@ -913,7 +974,7 @@ const styles = StyleSheet.create({
 
     fontSize: 10.5,
 
-    color: "#6B8F86",
+    color: Cores.textoSuave,
   },
 
 
@@ -941,7 +1002,7 @@ const styles = StyleSheet.create({
 
     borderRadius: 28,
 
-    backgroundColor: "#0B3B33",
+    backgroundColor: Cores.superficieMarca,
 
     justifyContent: "center",
     alignItems: "center",
@@ -949,11 +1010,17 @@ const styles = StyleSheet.create({
 
 
   profileAvatarText: {
-    color: "#FFFFFF",
+    color: Cores.textoSobreMarca,
 
     fontSize: 24,
 
     fontWeight: "800",
+  },
+
+  profileAvatarImage: {
+    width: 84,
+    height: 84,
+    borderRadius: 28,
   },
 
 
@@ -964,7 +1031,7 @@ const styles = StyleSheet.create({
 
     fontWeight: "700",
 
-    color: "#0B3B33",
+    color: Cores.texto,
   },
 
 
@@ -973,7 +1040,7 @@ const styles = StyleSheet.create({
 
     fontSize: 11,
 
-    color: "#6B8F86",
+    color: Cores.textoSuave,
   },
 
 
@@ -985,10 +1052,14 @@ const styles = StyleSheet.create({
 
     borderRadius: 20,
 
-    backgroundColor: "#F0F8F4",
+    backgroundColor: Cores.fundoCampo,
 
     borderWidth: 1,
-    borderColor: "#E1EEE8",
+    borderColor: Cores.borda,
+  },
+
+  photoButtonDisabled: {
+    opacity: 0.6,
   },
 
 
@@ -997,7 +1068,7 @@ const styles = StyleSheet.create({
 
     fontWeight: "700",
 
-    color: "#00A17A",
+    color: Cores.textoPositivo,
   },
 
 
@@ -1019,7 +1090,7 @@ const styles = StyleSheet.create({
 
     fontWeight: "700",
 
-    color: "#0B3B33",
+    color: Cores.texto,
   },
 
 
@@ -1039,9 +1110,15 @@ const styles = StyleSheet.create({
 
     fontWeight: "600",
 
-    color: "#6B8F86",
+    color: Cores.textoSuave,
   },
 
+  helperText: {
+    marginTop: 6,
+    color: Cores.textoSuave,
+    fontSize: 11,
+    lineHeight: 16,
+  },
 
   input: {
     minHeight: 50,
@@ -1050,14 +1127,14 @@ const styles = StyleSheet.create({
 
     borderRadius: 12,
 
-    backgroundColor: "#F0F8F4",
+    backgroundColor: Cores.fundoCampo,
 
     borderWidth: 1,
-    borderColor: "#E1EEE8",
+    borderColor: Cores.borda,
 
     fontSize: 13,
 
-    color: "#0B3B33",
+    color: Cores.texto,
   },
 
 
@@ -1072,7 +1149,7 @@ const styles = StyleSheet.create({
 
     borderRadius: 12,
 
-    backgroundColor: "#00C896",
+    backgroundColor: Cores.principal,
 
     justifyContent: "center",
     alignItems: "center",
@@ -1089,7 +1166,7 @@ const styles = StyleSheet.create({
 
     fontWeight: "700",
 
-    color: "#0B3B33",
+    color: Cores.textoSobrePrincipal,
   },
 
 
@@ -1109,10 +1186,10 @@ const styles = StyleSheet.create({
 
     borderRadius: 14,
 
-    backgroundColor: "#FFFFFF",
+    backgroundColor: Cores.cartaoFundo,
 
     borderWidth: 1,
-    borderColor: "#E1EEE8",
+    borderColor: Cores.borda,
   },
 
 
@@ -1125,7 +1202,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
 
-    backgroundColor: "#F0F8F4",
+    backgroundColor: Cores.fundoCampo,
   },
 
 
@@ -1146,7 +1223,7 @@ const styles = StyleSheet.create({
 
     fontWeight: "700",
 
-    color: "#0B3B33",
+    color: Cores.texto,
   },
 
 
@@ -1155,7 +1232,7 @@ const styles = StyleSheet.create({
 
     fontSize: 10,
 
-    color: "#6B8F86",
+    color: Cores.textoSuave,
   },
 
 
@@ -1166,7 +1243,7 @@ const styles = StyleSheet.create({
 
     fontWeight: "300",
 
-    color: "#6B8F86",
+    color: Cores.textoSuave,
   },
 
 
@@ -1176,6 +1253,7 @@ const styles = StyleSheet.create({
 
   logoutButton: {
     minHeight: 50,
+    marginTop: 16,
 
     flexDirection: "row",
 
@@ -1186,9 +1264,9 @@ const styles = StyleSheet.create({
 
     borderWidth: 1,
 
-    borderColor: "#FFB5AA",
+    borderColor: Cores.negativo,
 
-    backgroundColor: "#FFF7F5",
+    backgroundColor: Cores.superficieNegativa,
   },
 
 
@@ -1197,7 +1275,7 @@ const styles = StyleSheet.create({
 
     fontSize: 18,
 
-    color: "#D24A3B",
+    color: Cores.textoNegativo,
   },
 
 
@@ -1206,7 +1284,7 @@ const styles = StyleSheet.create({
 
     fontWeight: "700",
 
-    color: "#D24A3B",
+    color: Cores.textoNegativo,
   },
 
 
@@ -1230,7 +1308,7 @@ const styles = StyleSheet.create({
 
     letterSpacing: 1.5,
 
-    color: "#6B8F86",
+    color: Cores.textoSuave,
   },
 
 
@@ -1239,6 +1317,6 @@ const styles = StyleSheet.create({
 
     fontSize: 9,
 
-    color: "#6B8F86",
+    color: Cores.textoSuave,
   },
 });

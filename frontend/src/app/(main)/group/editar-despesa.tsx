@@ -1,11 +1,14 @@
+import { useAppTheme, useAppThemeScheme } from "@/hooks/useAppTheme";
+import type { PaletaSemantica } from "@/constants/Cores";
 import React, { useCallback, useState } from "react";
 import {
   ActivityIndicator, SafeAreaView, ScrollView, View, Text, TextInput,
-  TouchableOpacity, StyleSheet, StatusBar, Alert,
+  TouchableOpacity, StyleSheet, StatusBar,
 } from "react-native";
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import DateTimePicker, { DateTimePickerEvent } from "@react-native-community/datetimepicker";
 import { despesasGrupoApi } from "@/services/api";
+import { Alert } from "@/services/feedback";
 import type { DespesaGrupo } from "@/types/api";
 import { CATEGORIAS_GRUPO } from "@/constants/financeCategories";
 import { useCategoriasFinanceiras } from "@/hooks/useCategoriasFinanceiras";
@@ -19,6 +22,9 @@ import {
 type CampoFormulario = "descricao" | "valor" | "data";
 
 export default function EditarDespesaGrupo() {
+  const Cores = useAppTheme();
+  const styles = createStyles(Cores);
+  const esquema = useAppThemeScheme();
   const params = useLocalSearchParams();
   const { categorias, erro: erroCategorias } = useCategoriasFinanceiras("grupo", CATEGORIAS_GRUPO);
   const id = String(params.id ?? "");
@@ -142,7 +148,7 @@ export default function EditarDespesaGrupo() {
   if (carregando) {
     return (
       <SafeAreaView style={[styles.container, styles.estado]}>
-        <ActivityIndicator color="#00A17A" />
+        <ActivityIndicator color={Cores.textoPositivo} />
       </SafeAreaView>
     );
   }
@@ -162,7 +168,7 @@ export default function EditarDespesaGrupo() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" />
+      <StatusBar barStyle={esquema === "dark" ? "light-content" : "dark-content"} />
       <ScrollView contentContainerStyle={styles.conteudo}>
         <TouchableOpacity onPress={() => router.back()} style={styles.voltar}>
           <Text style={styles.voltarTexto}>‹  Voltar</Text>
@@ -229,30 +235,30 @@ export default function EditarDespesaGrupo() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#F5FBF7" },
+const createStyles = (Cores: PaletaSemantica) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: Cores.fundo },
   estado: { alignItems: "center", justifyContent: "center", padding: 24 },
-  erroCarregamento: { color: "#6B8F86", fontSize: 14, textAlign: "center", marginBottom: 20 },
+  erroCarregamento: { color: Cores.textoSuave, fontSize: 14, textAlign: "center", marginBottom: 20 },
   conteudo: { padding: 20, paddingBottom: 35 },
   voltar: { marginBottom: 18 },
-  voltarTexto: { color: "#0B3B33", fontSize: 14, fontWeight: "700" },
-  titulo: { color: "#0B3B33", fontSize: 24, fontWeight: "800" },
-  subtitulo: { color: "#6B8F86", fontSize: 12, lineHeight: 19, marginTop: 5, marginBottom: 25 },
-  label: { color: "#0B3B33", fontSize: 13, fontWeight: "700", marginBottom: 8, marginTop: 5 },
-  input: { minHeight: 52, backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#E1EEE8", borderRadius: 13, paddingHorizontal: 14, fontSize: 14, color: "#0B3B33", marginBottom: 18 },
-  inputComErro: { borderColor: "#D64545" },
-  erroCampo: { color: "#D64545", fontSize: 12, marginTop: -12, marginBottom: 14 },
-  seletorData: { height: 52, backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#E1EEE8", borderRadius: 13, paddingHorizontal: 14, justifyContent: "center", marginBottom: 18 },
-  textoSeletorData: { color: "#0B3B33", fontSize: 14 },
-  placeholderSeletorData: { color: "#8AA69E" },
+  voltarTexto: { color: Cores.texto, fontSize: 14, fontWeight: "700" },
+  titulo: { color: Cores.texto, fontSize: 24, fontWeight: "800" },
+  subtitulo: { color: Cores.textoSuave, fontSize: 12, lineHeight: 19, marginTop: 5, marginBottom: 25 },
+  label: { color: Cores.texto, fontSize: 13, fontWeight: "700", marginBottom: 8, marginTop: 5 },
+  input: { minHeight: 52, backgroundColor: Cores.cartaoFundo, borderWidth: 1, borderColor: Cores.borda, borderRadius: 13, paddingHorizontal: 14, fontSize: 14, color: Cores.texto, marginBottom: 18 },
+  inputComErro: { borderColor: Cores.negativo },
+  erroCampo: { color: Cores.textoNegativo, fontSize: 12, marginTop: -12, marginBottom: 14 },
+  seletorData: { height: 52, backgroundColor: Cores.cartaoFundo, borderWidth: 1, borderColor: Cores.borda, borderRadius: 13, paddingHorizontal: 14, justifyContent: "center", marginBottom: 18 },
+  textoSeletorData: { color: Cores.texto, fontSize: 14 },
+  placeholderSeletorData: { color: Cores.placeholder },
   categorias: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 18 },
-  categoria: { paddingHorizontal: 12, paddingVertical: 10, backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#E1EEE8", borderRadius: 12 },
-  categoriaAtiva: { backgroundColor: "#DDF7EE", borderColor: "#00C896" },
-  categoriaTexto: { color: "#6B8F86", fontSize: 11, fontWeight: "600" },
-  categoriaTextoAtivo: { color: "#0B3B33" },
+  categoria: { paddingHorizontal: 12, paddingVertical: 10, backgroundColor: Cores.cartaoFundo, borderWidth: 1, borderColor: Cores.borda, borderRadius: 12 },
+  categoriaAtiva: { backgroundColor: Cores.superficieVerdeSelecionada, borderColor: Cores.principal },
+  categoriaTexto: { color: Cores.textoSuave, fontSize: 11, fontWeight: "600" },
+  categoriaTextoAtivo: { color: Cores.texto },
   observacao: { minHeight: 90, paddingTop: 12, textAlignVertical: "top" },
-  salvar: { minHeight: 52, backgroundColor: "#00C896", borderRadius: 15, alignItems: "center", justifyContent: "center", marginTop: 5 },
-  salvarTexto: { color: "#FFFFFF", fontWeight: "800" },
+  salvar: { minHeight: 52, backgroundColor: Cores.principal, borderRadius: 15, alignItems: "center", justifyContent: "center", marginTop: 5 },
+  salvarTexto: { color: Cores.textoSobreAcao, fontWeight: "800" },
   cancelar: { minHeight: 46, alignItems: "center", justifyContent: "center", marginTop: 8 },
-  cancelarTexto: { color: "#6B8F86", fontWeight: "700" },
+  cancelarTexto: { color: Cores.textoSuave, fontWeight: "700" },
 });

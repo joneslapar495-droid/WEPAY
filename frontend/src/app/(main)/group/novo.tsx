@@ -1,7 +1,8 @@
+import { useAppTheme, useAppThemeScheme } from "@/hooks/useAppTheme";
+import type { PaletaSemantica } from "@/constants/Cores";
 import React, { useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   SafeAreaView,
@@ -15,11 +16,15 @@ import {
 } from "react-native";
 import { router } from "expo-router";
 import { gruposApi } from "@/services/api";
+import { Alert } from "@/services/feedback";
 
 const NOME_MIN_LENGTH = 2;
 const DESCRICAO_MAX_LENGTH = 200;
 
 export default function NovoGrupo() {
+  const Cores = useAppTheme();
+  const styles = createStyles(Cores);
+  const esquema = useAppThemeScheme();
   const [nome, setNome] = useState("");
   const [descricao, setDescricao] = useState("");
   const [salvando, setSalvando] = useState(false);
@@ -84,7 +89,7 @@ export default function NovoGrupo() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" />
+      <StatusBar barStyle={esquema === "dark" ? "light-content" : "dark-content"} />
       <KeyboardAvoidingView
         style={styles.teclado}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
@@ -134,7 +139,7 @@ export default function NovoGrupo() {
                 value={nome}
                 onChangeText={setNome}
                 placeholder="Ex.: Viagem para Bahia"
-                placeholderTextColor="#8AA69E"
+                placeholderTextColor={Cores.placeholder}
                 autoCapitalize="sentences"
                 returnKeyType="next"
                 maxLength={80}
@@ -152,7 +157,7 @@ export default function NovoGrupo() {
                 value={descricao}
                 onChangeText={setDescricao}
                 placeholder="Ex.: Despesas da viagem de julho"
-                placeholderTextColor="#8AA69E"
+                placeholderTextColor={Cores.placeholder}
                 autoCapitalize="sentences"
                 multiline
                 maxLength={DESCRICAO_MAX_LENGTH + 20}
@@ -186,7 +191,7 @@ export default function NovoGrupo() {
             >
               {salvando ? (
                 <View style={styles.carregando}>
-                  <ActivityIndicator color="#0B3B33" />
+                  <ActivityIndicator color={Cores.texto} />
                   <Text style={styles.botaoSalvarTexto}>Criando grupo...</Text>
                 </View>
               ) : (
@@ -209,8 +214,8 @@ export default function NovoGrupo() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#F5FBF7" },
+const createStyles = (Cores: PaletaSemantica) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: Cores.fundo },
   teclado: { flex: 1 },
   conteudo: { flexGrow: 1, paddingHorizontal: 20, paddingBottom: 30 },
   formulario: { width: "100%", maxWidth: 620, alignSelf: "center" },
@@ -224,23 +229,23 @@ const styles = StyleSheet.create({
     width: 42,
     height: 42,
     borderRadius: 21,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: Cores.cartaoFundo,
     borderWidth: 1,
-    borderColor: "#E1EEE8",
+    borderColor: Cores.borda,
     justifyContent: "center",
     alignItems: "center",
     marginRight: 12,
   },
-  voltar: { fontSize: 32, color: "#0B3B33", marginTop: -3 },
+  voltar: { fontSize: 32, color: Cores.texto, marginTop: -3 },
   headerTexto: { flex: 1 },
-  titulo: { fontSize: 22, fontWeight: "700", color: "#0B3B33" },
-  subtitulo: { fontSize: 12, color: "#6B8F86", marginTop: 4, lineHeight: 17 },
+  titulo: { fontSize: 22, fontWeight: "700", color: Cores.texto },
+  subtitulo: { fontSize: 12, color: Cores.textoSuave, marginTop: 4, lineHeight: 17 },
   introducao: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#E8F9F2",
+    backgroundColor: Cores.superficieVerde,
     borderWidth: 1,
-    borderColor: "#C9EFE1",
+    borderColor: Cores.bordaDestaque,
     borderRadius: 16,
     padding: 14,
     marginBottom: 25,
@@ -249,7 +254,7 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 15,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: Cores.cartaoFundo,
     justifyContent: "center",
     alignItems: "center",
     marginRight: 12,
@@ -259,37 +264,37 @@ const styles = StyleSheet.create({
   introducaoTitulo: {
     fontSize: 14,
     fontWeight: "700",
-    color: "#0B3B33",
+    color: Cores.texto,
     marginBottom: 3,
   },
-  introducaoSubtitulo: { fontSize: 11, color: "#6B8F86", lineHeight: 16 },
+  introducaoSubtitulo: { fontSize: 11, color: Cores.textoSuave, lineHeight: 16 },
   campo: { marginBottom: 20 },
   label: {
     fontSize: 13,
     fontWeight: "600",
-    color: "#0B3B33",
+    color: Cores.texto,
     marginBottom: 8,
   },
   input: {
     minHeight: 52,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: Cores.cartaoFundo,
     borderWidth: 1,
-    borderColor: "#E1EEE8",
+    borderColor: Cores.borda,
     borderRadius: 13,
     paddingHorizontal: 15,
     fontSize: 14,
-    color: "#0B3B33",
+    color: Cores.texto,
   },
-  ajudaCampo: { fontSize: 11, color: "#6B8F86", marginTop: 7, lineHeight: 16 },
-  erroTexto: { color: "#B42318" },
-  inputErro: { borderColor: "#D92D20" },
+  ajudaCampo: { fontSize: 11, color: Cores.textoSuave, marginTop: 7, lineHeight: 16 },
+  erroTexto: { color: Cores.textoNegativo },
+  inputErro: { borderColor: Cores.negativo },
   inputDescricao: { height: 112, paddingTop: 14 },
   aviso: {
     flexDirection: "row",
     alignItems: "flex-start",
-    backgroundColor: "#E8F9F2",
+    backgroundColor: Cores.superficieVerde,
     borderWidth: 1,
-    borderColor: "#C9EFE1",
+    borderColor: Cores.bordaDestaque,
     borderRadius: 15,
     padding: 15,
     marginTop: 1,
@@ -299,29 +304,29 @@ const styles = StyleSheet.create({
     width: 34,
     height: 34,
     borderRadius: 11,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: Cores.cartaoFundo,
     alignItems: "center",
     justifyContent: "center",
     marginRight: 11,
   },
-  avisoIconeTexto: { fontSize: 18, color: "#00A17A" },
+  avisoIconeTexto: { fontSize: 18, color: Cores.textoPositivo },
   avisoConteudo: { flex: 1 },
   avisoTitulo: {
     fontSize: 13,
     fontWeight: "700",
-    color: "#0B3B33",
+    color: Cores.texto,
     marginBottom: 4,
   },
-  avisoTexto: { fontSize: 11, color: "#6B8F86", lineHeight: 17 },
+  avisoTexto: { fontSize: 11, color: Cores.textoSuave, lineHeight: 17 },
   botaoSalvar: {
     height: 54,
-    backgroundColor: "#00C896",
+    backgroundColor: Cores.principal,
     borderRadius: 15,
     justifyContent: "center",
     alignItems: "center",
     marginTop: 2,
   },
-  botaoSalvarTexto: { fontSize: 15, fontWeight: "700", color: "#0B3B33" },
+  botaoSalvarTexto: { fontSize: 15, fontWeight: "700", color: Cores.textoSobrePrincipal },
   carregando: { flexDirection: "row", alignItems: "center", gap: 9 },
   botaoDesabilitado: { opacity: 0.6 },
   botaoCancelar: {
@@ -330,5 +335,5 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginTop: 5,
   },
-  botaoCancelarTexto: { fontSize: 13, fontWeight: "600", color: "#6B8F86" },
+  botaoCancelarTexto: { fontSize: 13, fontWeight: "600", color: Cores.textoSuave },
 });

@@ -1,3 +1,5 @@
+import { useAppTheme, useAppThemeScheme } from "@/hooks/useAppTheme";
+import type { PaletaSemantica } from "@/constants/Cores";
 
 /**
  * WEPAY — NOVA DESPESA EM GRUPO
@@ -18,13 +20,13 @@ import {
   StyleSheet,
   ScrollView,
   StatusBar,
-  Alert,
   KeyboardAvoidingView,
   Platform,
 } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import DateTimePicker, { DateTimePickerEvent } from "@react-native-community/datetimepicker";
 import { despesasGrupoApi, participantesApi } from "@/services/api";
+import { Alert } from "@/services/feedback";
 import {
   formatDateForInput,
   normalizeDateInput,
@@ -55,6 +57,9 @@ function obterParametro(
 }
 
 export default function NovaDespesaGrupo() {
+  const Cores = useAppTheme();
+  const styles = createStyles(Cores);
+  const esquema = useAppThemeScheme();
   const params = useLocalSearchParams();
   const { categorias, erro: erroCategorias } = useCategoriasFinanceiras("grupo", CATEGORIAS);
 
@@ -108,29 +113,6 @@ export default function NovaDespesaGrupo() {
   const descricaoLimpa = descricao.trim();
   const valorNumerico = parseCurrencyInput(valor);
   const dataLimpa = data.trim();
-  const dataValida = !!dataLimpa && !!parseDateInputToIso(dataLimpa);
-  const erroDescricao =
-    descricao === ""
-      ? "Digite a descrição da despesa."
-      : descricaoLimpa.length < 2
-        ? "A descrição deve ter pelo menos 2 caracteres."
-        : "";
-  const erroValor =
-    valor === ""
-      ? "Digite um valor válido para a despesa."
-      : !Number.isFinite(valorNumerico) || valorNumerico <= 0
-        ? "Digite um valor maior que zero."
-        : "";
-  const erroData =
-    data === ""
-      ? "Informe a data da despesa."
-      : !dataValida
-        ? "Informe uma data válida no formato DD/MM/AAAA."
-        : "";
-  const erroParticipantes =
-    participantesSelecionados.length === 0
-      ? "Selecione pelo menos um participante para dividir a despesa."
-      : "";
 
   function selecionarData(_evento: DateTimePickerEvent, dataSelecionada?: Date) {
     setMostrarSeletorData(false);
@@ -441,7 +423,7 @@ export default function NovaDespesaGrupo() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" />
+      <StatusBar barStyle={esquema === "dark" ? "light-content" : "dark-content"} />
 
       <KeyboardAvoidingView
         style={styles.flex}
@@ -505,15 +487,14 @@ export default function NovaDespesaGrupo() {
             <Text style={styles.label}>Descrição</Text>
 
             <TextInput
-              style={[styles.input, erroDescricao ? styles.inputErro : null]}
+              style={styles.input}
               placeholder="Ex.: Mercado, jantar, hospedagem"
-              placeholderTextColor="#8AA69E"
+              placeholderTextColor={Cores.placeholder}
               value={descricao}
               onChangeText={setDescricao}
               autoCapitalize="sentences"
               maxLength={120}
             />
-            {erroDescricao ? <Text style={styles.erroTexto}>{erroDescricao}</Text> : null}
           </View>
 
           {/* VALOR */}
@@ -525,15 +506,14 @@ export default function NovaDespesaGrupo() {
               <Text style={styles.simbolo}>R$</Text>
 
               <TextInput
-                style={[styles.inputValor, erroValor ? styles.inputErro : null]}
+                style={styles.inputValor}
                 placeholder="0,00"
-                placeholderTextColor="#8AA69E"
+                placeholderTextColor={Cores.placeholder}
                 value={valor}
                 onChangeText={setValor}
                 keyboardType="decimal-pad"
               />
             </View>
-            {erroValor ? <Text style={styles.erroTexto}>{erroValor}</Text> : null}
 
             {tipoDivisao === "IGUAL" &&
               valorNumerico > 0 &&
@@ -549,10 +529,9 @@ export default function NovaDespesaGrupo() {
 
           <View style={styles.campo}>
             <Text style={styles.label}>Data</Text>
-            <TouchableOpacity style={[styles.seletorData, erroData ? styles.inputErro : null]} onPress={() => setMostrarSeletorData(true)} activeOpacity={0.8}>
+            <TouchableOpacity style={styles.seletorData} onPress={() => setMostrarSeletorData(true)} activeOpacity={0.8}>
               <Text style={[styles.textoSeletorData, !data && styles.placeholderSeletorData]}>{data || "Escolher data"}</Text>
             </TouchableOpacity>
-            {erroData ? <Text style={styles.erroTexto}>{erroData}</Text> : null}
             {mostrarSeletorData && (
               <DateTimePicker
                 value={parseDateInputToDate(data) ?? new Date()}
@@ -683,7 +662,7 @@ export default function NovaDespesaGrupo() {
               Toque para incluir ou retirar participantes.
             </Text>
 
-            <View style={[styles.listaOpcoes, erroParticipantes ? styles.blocoErro : null]}>
+            <View style={styles.listaOpcoes}>
               {participantes.map((participante) => {
                 const selecionado =
                   participantesSelecionados.includes(participante.id);
@@ -739,7 +718,6 @@ export default function NovaDespesaGrupo() {
                 );
               })}
             </View>
-            {erroParticipantes ? <Text style={styles.erroTexto}>{erroParticipantes}</Text> : null}
           </View>
 
           {/* TIPO DE DIVISÃO */}
@@ -851,7 +829,7 @@ export default function NovaDespesaGrupo() {
                         <TextInput
                           style={styles.inputIndividual}
                           placeholder="0,00"
-                          placeholderTextColor="#8AA69E"
+                          placeholderTextColor={Cores.placeholder}
                           value={
                             valoresIndividuais[participante.id] ?? ""
                           }
@@ -893,7 +871,7 @@ export default function NovaDespesaGrupo() {
                         <TextInput
                           style={styles.inputPercentual}
                           placeholder="0"
-                          placeholderTextColor="#8AA69E"
+                          placeholderTextColor={Cores.placeholder}
                           value={
                             percentuaisIndividuais[participante.id] ?? ""
                           }
@@ -924,7 +902,7 @@ export default function NovaDespesaGrupo() {
             <TextInput
               style={[styles.input, styles.inputObservacao]}
               placeholder="Adicione uma informação sobre a despesa..."
-              placeholderTextColor="#8AA69E"
+              placeholderTextColor={Cores.placeholder}
               value={observacao}
               onChangeText={setObservacao}
               multiline
@@ -963,14 +941,14 @@ export default function NovaDespesaGrupo() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (Cores: PaletaSemantica) => StyleSheet.create({
   flex: {
     flex: 1,
   },
 
   container: {
     flex: 1,
-    backgroundColor: "#F5FBF7",
+    backgroundColor: Cores.fundo,
   },
 
   scroll: {
@@ -995,9 +973,9 @@ const styles = StyleSheet.create({
     width: 42,
     height: 42,
     borderRadius: 21,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: Cores.cartaoFundo,
     borderWidth: 1,
-    borderColor: "#E1EEE8",
+    borderColor: Cores.borda,
     justifyContent: "center",
     alignItems: "center",
     marginRight: 12,
@@ -1005,7 +983,7 @@ const styles = StyleSheet.create({
 
   voltar: {
     fontSize: 32,
-    color: "#0B3B33",
+    color: Cores.texto,
     marginTop: -3,
   },
 
@@ -1016,12 +994,12 @@ const styles = StyleSheet.create({
   titulo: {
     fontSize: 22,
     fontWeight: "700",
-    color: "#0B3B33",
+    color: Cores.texto,
   },
 
   subtitulo: {
     fontSize: 12,
-    color: "#6B8F86",
+    color: Cores.textoSuave,
     marginTop: 4,
   },
 
@@ -1030,9 +1008,9 @@ const styles = StyleSheet.create({
   cardIA: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#E8F9F2",
+    backgroundColor: Cores.superficieVerde,
     borderWidth: 1,
-    borderColor: "#C9EFE1",
+    borderColor: Cores.bordaDestaque,
     borderRadius: 16,
     padding: 14,
     marginBottom: 24,
@@ -1042,7 +1020,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 14,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: Cores.cartaoFundo,
     justifyContent: "center",
     alignItems: "center",
     marginRight: 12,
@@ -1059,19 +1037,19 @@ const styles = StyleSheet.create({
   iaTitulo: {
     fontSize: 14,
     fontWeight: "700",
-    color: "#0B3B33",
+    color: Cores.texto,
     marginBottom: 3,
   },
 
   iaSubtitulo: {
     fontSize: 10,
-    color: "#6B8F86",
+    color: Cores.textoSuave,
     lineHeight: 15,
   },
 
   seta: {
     fontSize: 25,
-    color: "#00A17A",
+    color: Cores.textoPositivo,
     marginLeft: 8,
   },
 
@@ -1084,52 +1062,40 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 13,
     fontWeight: "600",
-    color: "#0B3B33",
+    color: Cores.texto,
     marginBottom: 8,
   },
 
   input: {
     minHeight: 52,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: Cores.cartaoFundo,
     borderWidth: 1,
-    borderColor: "#E1EEE8",
+    borderColor: Cores.borda,
     borderRadius: 13,
     paddingHorizontal: 15,
     fontSize: 14,
-    color: "#0B3B33",
-  },
-  inputErro: {
-    borderColor: "#D92D20",
-  },
-  erroTexto: {
-    marginTop: 6,
-    color: "#B42318",
-    fontSize: 11,
-    lineHeight: 16,
-  },
-  blocoErro: {
-    borderColor: "#D92D20",
+    color: Cores.texto,
   },
   seletorData: {
     height: 52,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: Cores.cartaoFundo,
     borderWidth: 1,
-    borderColor: "#E1EEE8",
+    borderColor: Cores.borda,
     borderRadius: 13,
     paddingHorizontal: 15,
     justifyContent: "center",
   },
 
-  textoSeletorData: { fontSize: 14, color: "#0B3B33" },
-  placeholderSeletorData: { color: "#8AA69E" },
+  textoSeletorData: { fontSize: 14, color: Cores.texto },
+  placeholderSeletorData: { color: Cores.placeholder },
 
   valorContainer: {
     height: 52,
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#FFFFFF",
+    backgroundColor: Cores.cartaoFundo,
     borderWidth: 1,
-    borderColor: "#E1EEE8",
+    borderColor: Cores.borda,
     borderRadius: 13,
     paddingHorizontal: 15,
   },
@@ -1137,7 +1103,7 @@ const styles = StyleSheet.create({
   simbolo: {
     fontSize: 14,
     fontWeight: "700",
-    color: "#0B3B33",
+    color: Cores.texto,
     marginRight: 8,
   },
 
@@ -1145,19 +1111,19 @@ const styles = StyleSheet.create({
     flex: 1,
     height: "100%",
     fontSize: 18,
-    color: "#0B3B33",
+    color: Cores.texto,
   },
 
   ajuda: {
     fontSize: 11,
     lineHeight: 17,
-    color: "#6B8F86",
+    color: Cores.textoSuave,
     marginTop: 7,
   },
 
   descricaoSecao: {
     fontSize: 11,
-    color: "#6B8F86",
+    color: Cores.textoSuave,
     lineHeight: 17,
     marginTop: -2,
     marginBottom: 10,
@@ -1167,7 +1133,7 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingRight: 10,
   },
-  erroCategorias: { color: "#D64545", fontSize: 12, marginTop: 6 },
+  erroCategorias: { color: Cores.textoErroFormulario, fontSize: 12, marginTop: 6 },
 
   categoria: {
     flexDirection: "row",
@@ -1175,14 +1141,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
     borderRadius: 12,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: Cores.cartaoFundo,
     borderWidth: 1,
-    borderColor: "#E1EEE8",
+    borderColor: Cores.borda,
   },
 
   categoriaSelecionada: {
-    backgroundColor: "#DDF7EE",
-    borderColor: "#00C896",
+    backgroundColor: Cores.superficieVerdeSelecionada,
+    borderColor: Cores.principal,
   },
 
   categoriaIcone: {
@@ -1192,12 +1158,12 @@ const styles = StyleSheet.create({
 
   categoriaTexto: {
     fontSize: 11,
-    color: "#6B8F86",
+    color: Cores.textoSuave,
     fontWeight: "600",
   },
 
   categoriaTextoSelecionado: {
-    color: "#0B3B33",
+    color: Cores.texto,
   },
 
   /* PAGADOR E PARTICIPANTES */
@@ -1210,52 +1176,52 @@ const styles = StyleSheet.create({
     minHeight: 58,
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#FFFFFF",
+    backgroundColor: Cores.cartaoFundo,
     borderWidth: 1,
-    borderColor: "#E1EEE8",
+    borderColor: Cores.borda,
     borderRadius: 13,
     paddingHorizontal: 12,
     paddingVertical: 8,
   },
 
   opcaoPessoaSelecionada: {
-    backgroundColor: "#F1FBF7",
-    borderColor: "#00C896",
+    backgroundColor: Cores.superficieVerde,
+    borderColor: Cores.principal,
   },
 
   avatar: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: "#EAF7F3",
+    backgroundColor: Cores.superficieVerde,
     justifyContent: "center",
     alignItems: "center",
     marginRight: 11,
   },
 
   avatarSelecionado: {
-    backgroundColor: "#00C896",
+    backgroundColor: Cores.principal,
   },
 
   avatarTexto: {
     fontSize: 10,
     fontWeight: "800",
-    color: "#6B8F86",
+    color: Cores.textoSuave,
   },
 
   avatarTextoSelecionado: {
-    color: "#0B3B33",
+    color: Cores.textoSobrePrincipal,
   },
 
   nomePessoa: {
     flex: 1,
     fontSize: 13,
-    color: "#6B8F86",
+    color: Cores.textoSuave,
     fontWeight: "500",
   },
 
   nomePessoaSelecionado: {
-    color: "#0B3B33",
+    color: Cores.texto,
     fontWeight: "700",
   },
 
@@ -1264,20 +1230,20 @@ const styles = StyleSheet.create({
     height: 20,
     borderRadius: 10,
     borderWidth: 1.5,
-    borderColor: "#B7CEC5",
+    borderColor: Cores.borda,
     alignItems: "center",
     justifyContent: "center",
   },
 
   radioSelecionado: {
-    borderColor: "#00C896",
+    borderColor: Cores.principal,
   },
 
   radioCentro: {
     width: 10,
     height: 10,
     borderRadius: 5,
-    backgroundColor: "#00C896",
+    backgroundColor: Cores.principal,
   },
 
   checkbox: {
@@ -1285,20 +1251,20 @@ const styles = StyleSheet.create({
     height: 21,
     borderRadius: 6,
     borderWidth: 1.5,
-    borderColor: "#B7CEC5",
+    borderColor: Cores.borda,
     alignItems: "center",
     justifyContent: "center",
   },
 
   checkboxSelecionado: {
-    backgroundColor: "#00C896",
-    borderColor: "#00C896",
+    backgroundColor: Cores.principal,
+    borderColor: Cores.principal,
   },
 
   checkTexto: {
     fontSize: 13,
     fontWeight: "800",
-    color: "#FFFFFF",
+    color: Cores.textoSobreAcao,
   },
 
   /* TIPOS DE DIVISÃO */
@@ -1311,9 +1277,9 @@ const styles = StyleSheet.create({
   divisao: {
     flex: 1,
     minHeight: 108,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: Cores.cartaoFundo,
     borderWidth: 1,
-    borderColor: "#E1EEE8",
+    borderColor: Cores.borda,
     borderRadius: 13,
     paddingHorizontal: 6,
     paddingVertical: 12,
@@ -1322,8 +1288,8 @@ const styles = StyleSheet.create({
   },
 
   divisaoSelecionada: {
-    backgroundColor: "#DDF7EE",
-    borderColor: "#00C896",
+    backgroundColor: Cores.superficieVerdeSelecionada,
+    borderColor: Cores.principal,
   },
 
   divisaoIcone: {
@@ -1334,17 +1300,17 @@ const styles = StyleSheet.create({
   divisaoTitulo: {
     fontSize: 12,
     fontWeight: "700",
-    color: "#6B8F86",
+    color: Cores.textoSuave,
     textAlign: "center",
   },
 
   divisaoTituloSelecionado: {
-    color: "#0B3B33",
+    color: Cores.texto,
   },
 
   divisaoDescricao: {
     fontSize: 9,
-    color: "#6B8F86",
+    color: Cores.textoSuave,
     marginTop: 5,
     textAlign: "center",
   },
@@ -1352,16 +1318,16 @@ const styles = StyleSheet.create({
   detalhesDivisao: {
     marginTop: 14,
     padding: 13,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: Cores.cartaoFundo,
     borderWidth: 1,
-    borderColor: "#E1EEE8",
+    borderColor: Cores.borda,
     borderRadius: 13,
   },
 
   detalhesTitulo: {
     fontSize: 12,
     fontWeight: "700",
-    color: "#0B3B33",
+    color: Cores.texto,
     marginBottom: 12,
   },
 
@@ -1371,14 +1337,14 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     borderBottomWidth: 1,
-    borderBottomColor: "#F0F6F3",
+    borderBottomColor: Cores.borda,
     paddingVertical: 5,
   },
 
   nomeLinha: {
     flex: 1,
     fontSize: 12,
-    color: "#0B3B33",
+    color: Cores.texto,
     paddingRight: 8,
   },
 
@@ -1388,13 +1354,13 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     borderWidth: 1,
-    borderColor: "#E1EEE8",
+    borderColor: Cores.borda,
     borderRadius: 10,
     paddingHorizontal: 8,
   },
 
   simboloPequeno: {
-    color: "#6B8F86",
+    color: Cores.textoSuave,
     fontSize: 10,
     fontWeight: "700",
     marginRight: 4,
@@ -1404,7 +1370,7 @@ const styles = StyleSheet.create({
     flex: 1,
     height: "100%",
     fontSize: 13,
-    color: "#0B3B33",
+    color: Cores.texto,
     textAlign: "right",
   },
 
@@ -1414,7 +1380,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     borderWidth: 1,
-    borderColor: "#E1EEE8",
+    borderColor: Cores.borda,
     borderRadius: 10,
     paddingHorizontal: 8,
   },
@@ -1423,12 +1389,12 @@ const styles = StyleSheet.create({
     flex: 1,
     height: "100%",
     fontSize: 13,
-    color: "#0B3B33",
+    color: Cores.texto,
     textAlign: "right",
   },
 
   simboloPercentual: {
-    color: "#6B8F86",
+    color: Cores.textoSuave,
     fontSize: 12,
     fontWeight: "700",
     marginLeft: 4,
@@ -1447,14 +1413,14 @@ const styles = StyleSheet.create({
   botaoSalvar: {
     height: 52,
     borderRadius: 16,
-    backgroundColor: "#00C896",
+    backgroundColor: Cores.principal,
     justifyContent: "center",
     alignItems: "center",
     marginTop: 5,
   },
 
   botaoSalvarTexto: {
-    color: "#FFFFFF",
+    color: Cores.textoSobreAcao,
     fontSize: 15,
     fontWeight: "800",
   },
@@ -1462,16 +1428,16 @@ const styles = StyleSheet.create({
   botaoCancelar: {
     height: 52,
     borderRadius: 16,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: Cores.cartaoFundo,
     borderWidth: 1,
-    borderColor: "#E1EEE8",
+    borderColor: Cores.borda,
     justifyContent: "center",
     alignItems: "center",
     marginTop: 10,
   },
 
   botaoCancelarTexto: {
-    color: "#6B8F86",
+    color: Cores.textoSuave,
     fontSize: 14,
     fontWeight: "700",
   },

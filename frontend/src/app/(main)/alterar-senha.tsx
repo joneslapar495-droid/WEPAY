@@ -1,3 +1,5 @@
+import { useAppTheme } from "@/hooks/useAppTheme";
+import type { PaletaSemantica } from "@/constants/Cores";
 /*
  * WEPAY — ALTERAR SENHA
  */
@@ -11,16 +13,16 @@ import {
   StyleSheet,
   SafeAreaView,
   ScrollView,
-  Alert,
 } from "react-native";
 import { router } from "expo-router";
 import { authApi } from "@/services/api";
 import { useUsuario } from "@/contexts/UsuarioContext";
 import { MIN_PASSWORD_LENGTH } from "@/constants/password";
-
-import { Cores } from "../../constants/Cores";
+import { Alert } from "@/services/feedback";
 
 export default function AlterarSenha() {
+  const Cores = useAppTheme();
+  const styles = createStyles(Cores);
   const { logout } = useUsuario();
   const [senhaAtual, setSenhaAtual] =
     useState("");
@@ -163,7 +165,7 @@ export default function AlterarSenha() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (Cores: PaletaSemantica) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Cores.fundo,
@@ -185,7 +187,7 @@ const styles = StyleSheet.create({
     width: 42,
     height: 42,
     borderRadius: 12,
-    backgroundColor: Cores.branco,
+    backgroundColor: Cores.cartaoFundo,
     borderWidth: 1,
     borderColor: Cores.borda,
     justifyContent: "center",
@@ -257,7 +259,7 @@ const styles = StyleSheet.create({
   },
 
   primaryButtonText: {
-    color: Cores.texto,
+    color: Cores.textoSobrePrincipal,
     fontWeight: "700",
     fontSize: 15,
   },

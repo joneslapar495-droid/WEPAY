@@ -1,9 +1,10 @@
+import { useAppTheme, useAppThemeScheme } from "@/hooks/useAppTheme";
+import type { PaletaSemantica } from "@/constants/Cores";
 
 import React from "react";
 
 import {
   ActivityIndicator,
-  Alert,
   Pressable,
   Platform,
   ScrollView,
@@ -16,23 +17,17 @@ import {
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { despesasPessoaisApi } from "@/services/api";
 import { CATEGORIAS_PESSOAIS as CATEGORIAS } from "@/constants/financeCategories";
+import { useCategoriasFinanceiras } from "@/hooks/useCategoriasFinanceiras";
 import type { DespesaPessoal } from "@/types/api";
 import { formatDateForDisplay } from "@/utils/financeInput";
 import { formatCurrencyBRL } from "@/utils/financeFormat";
-
-const WEPAY = {
-  paper: "#F5FBF7",
-  ink: "#0B3B33",
-  inkSoft: "#315D53",
-  accent: "#00C896",
-  accentDark: "#00A17A",
-  softGreen: "#BFE0D6",
-  surface: "#FFFFFF",
-  line: "#E1EEE8",
-  muted: "#6B8F86",
-};
+import { Alert } from "@/services/feedback";
 
 export default function DetalhesDespesaPessoalScreen() {
+  const Cores = useAppTheme();
+  const esquema = useAppThemeScheme();
+  const styles = createStyles(Cores);
+  const { categorias } = useCategoriasFinanceiras("pessoal", CATEGORIAS);
   const params = useLocalSearchParams<{ id?: string | string[] }>();
   const id = Array.isArray(params.id) ? params.id[0] : params.id;
   const idNumerico = id ? Number(id) : NaN;
@@ -142,8 +137,8 @@ export default function DetalhesDespesaPessoalScreen() {
   if (carregando) {
     return (
       <View style={[styles.container, styles.loading]}>
-        <StatusBar barStyle="dark-content" />
-        <ActivityIndicator color={WEPAY.accent} />
+        <StatusBar barStyle={esquema === "dark" ? "light-content" : "dark-content"} />
+        <ActivityIndicator color={Cores.principal} />
       </View>
     );
   }
@@ -178,13 +173,13 @@ export default function DetalhesDespesaPessoalScreen() {
   }
 
   const tipoLabel = despesa.tipo === "receita" ? "Receita pessoal" : "Despesa pessoal";
-  const categoria = CATEGORIAS.find(
+  const categoria = categorias.find(
     (item) => item.nome === despesa.categoria
   );
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="dark-content" />
+      <StatusBar barStyle={esquema === "dark" ? "light-content" : "dark-content"} />
 
       <ScrollView
         showsVerticalScrollIndicator={false}
@@ -361,7 +356,7 @@ export default function DetalhesDespesaPessoalScreen() {
             ]}
           >
             {excluindo ? (
-              <ActivityIndicator color="#D24A3B" />
+              <ActivityIndicator color={Cores.textoNegativo} />
             ) : (
               <Text style={styles.deleteButtonText}>Excluir despesa</Text>
             )}
@@ -378,10 +373,10 @@ export default function DetalhesDespesaPessoalScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (Cores: PaletaSemantica) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: WEPAY.paper,
+    backgroundColor: Cores.fundo,
   },
 
   loading: {
@@ -405,32 +400,32 @@ const styles = StyleSheet.create({
   },
 
   backIcon: {
-    color: WEPAY.accentDark,
+    color: Cores.textoPositivo,
     fontSize: 29,
     lineHeight: 30,
     marginRight: 5,
   },
 
   backText: {
-    color: WEPAY.accentDark,
+    color: Cores.textoPositivo,
     fontSize: 13,
     fontWeight: "600",
   },
 
   headerTitle: {
-    color: WEPAY.ink,
+    color: Cores.texto,
     fontSize: 22,
     fontWeight: "700",
   },
 
   headerSubtitle: {
-    color: WEPAY.muted,
+    color: Cores.textoSuave,
     fontSize: 12,
     marginTop: 5,
   },
 
   mainCard: {
-    backgroundColor: WEPAY.ink,
+    backgroundColor: Cores.superficieMarca,
     borderRadius: 18,
     padding: 20,
     overflow: "hidden",
@@ -445,7 +440,7 @@ const styles = StyleSheet.create({
   receiptIcon: {
     width: 48,
     height: 48,
-    backgroundColor: WEPAY.accent,
+    backgroundColor: Cores.principal,
     borderRadius: 15,
     alignItems: "center",
     justifyContent: "center",
@@ -463,20 +458,20 @@ const styles = StyleSheet.create({
   },
 
   originBadgeText: {
-    color: WEPAY.softGreen,
+    color: Cores.textoSuaveSobreMarca,
     fontSize: 10,
     fontWeight: "600",
   },
 
   expenseDescription: {
-    color: WEPAY.surface,
+    color: Cores.textoSobreMarca,
     fontSize: 17,
     fontWeight: "700",
     marginTop: 20,
   },
 
   expenseValue: {
-    color: WEPAY.accent,
+    color: Cores.principal,
     fontSize: 30,
     fontWeight: "700",
     marginTop: 7,
@@ -494,7 +489,7 @@ const styles = StyleSheet.create({
   },
 
   mainCardFooterText: {
-    color: WEPAY.softGreen,
+    color: Cores.textoSuaveSobreMarca,
     fontSize: 11,
     fontWeight: "500",
   },
@@ -505,17 +500,17 @@ const styles = StyleSheet.create({
   },
 
   sectionTitle: {
-    color: WEPAY.ink,
+    color: Cores.texto,
     fontSize: 15,
     fontWeight: "700",
   },
 
   detailsCard: {
-    backgroundColor: WEPAY.surface,
+    backgroundColor: Cores.cartaoFundo,
     borderRadius: 16,
     paddingHorizontal: 15,
     borderWidth: 1,
-    borderColor: WEPAY.line,
+    borderColor: Cores.borda,
   },
 
   detailRow: {
@@ -538,12 +533,12 @@ const styles = StyleSheet.create({
   },
 
   detailLabel: {
-    color: WEPAY.muted,
+    color: Cores.textoSuave,
     fontSize: 11,
   },
 
   detailValue: {
-    color: WEPAY.ink,
+    color: Cores.texto,
     fontSize: 11,
     fontWeight: "600",
     textAlign: "right",
@@ -552,19 +547,19 @@ const styles = StyleSheet.create({
 
   divider: {
     height: 1,
-    backgroundColor: WEPAY.line,
+    backgroundColor: Cores.borda,
   },
 
   observationCard: {
-    backgroundColor: WEPAY.surface,
+    backgroundColor: Cores.cartaoFundo,
     borderRadius: 14,
     padding: 15,
     borderWidth: 1,
-    borderColor: WEPAY.line,
+    borderColor: Cores.borda,
   },
 
   observationText: {
-    color: WEPAY.inkSoft,
+    color: Cores.textoSecundario,
     fontSize: 12,
     lineHeight: 19,
   },
@@ -576,28 +571,28 @@ const styles = StyleSheet.create({
 
   editButton: {
     height: 50,
-    backgroundColor: WEPAY.accent,
+    backgroundColor: Cores.principal,
     borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
   },
 
   editButtonText: {
-    color: WEPAY.ink,
+    color: Cores.texto,
     fontSize: 13,
     fontWeight: "700",
   },
 
   deleteButton: {
     height: 48,
-    backgroundColor: "#FFE7E2",
+    backgroundColor: Cores.superficieNegativa,
     borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
   },
 
   deleteButtonText: {
-    color: "#D24A3B",
+    color: Cores.textoNegativo,
     fontSize: 12,
     fontWeight: "700",
   },
@@ -607,14 +602,14 @@ const styles = StyleSheet.create({
   },
 
   actionError: {
-    color: "#D24A3B",
+    color: Cores.textoNegativo,
     fontSize: 12,
     textAlign: "center",
   },
 
   notFound: {
     flex: 1,
-    backgroundColor: WEPAY.paper,
+    backgroundColor: Cores.fundo,
     alignItems: "center",
     justifyContent: "center",
     padding: 25,
@@ -626,13 +621,13 @@ const styles = StyleSheet.create({
   },
 
   notFoundTitle: {
-    color: WEPAY.ink,
+    color: Cores.texto,
     fontWeight: "700",
     fontSize: 17,
   },
 
   notFoundDescription: {
-    color: WEPAY.muted,
+    color: Cores.textoSuave,
     fontSize: 12,
     textAlign: "center",
     lineHeight: 18,
@@ -641,14 +636,14 @@ const styles = StyleSheet.create({
   },
 
   backButton: {
-    backgroundColor: WEPAY.accent,
+    backgroundColor: Cores.principal,
     borderRadius: 12,
     paddingHorizontal: 20,
     paddingVertical: 13,
   },
 
   backButtonText: {
-    color: WEPAY.ink,
+    color: Cores.texto,
     fontWeight: "700",
     fontSize: 12,
   },

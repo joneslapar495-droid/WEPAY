@@ -21,13 +21,24 @@ export interface Categoria {
   id: number;
   usuario_id: number | null;
   nome: string;
+  icone: string;
   tipo: "pessoal" | "grupo" | "ambos";
+  origem: "padrao" | "personalizada";
+  quantidade_despesas: number;
   criado_em: string;
+}
+
+export interface CategoriaIconeUsuario {
+  nome: string;
+  tipo: "pessoal" | "grupo";
+  icone: string;
 }
 
 export interface Notificacao {
   id: number;
   grupo_id: number | null;
+  grupo_nome?: string | null;
+  referencia_id?: number | null;
   tipo: string;
   titulo: string;
   mensagem: string;
@@ -41,6 +52,7 @@ export interface DespesaPessoal {
   descricao: string;
   valor: number;
   categoria: string | null;
+  categoria_id?: number | null;
   tipo: "despesa" | "receita";
   data_despesa: string;
   criado_em: string;
@@ -73,6 +85,7 @@ export interface Participante {
   ativo: number;
   nome?: string;
   email?: string | null;
+  avatar_url?: string | null;
 }
 
 export interface DivisaoDespesa {
@@ -89,6 +102,7 @@ export interface DespesaGrupo {
   pagador_id: number;
   descricao: string;
   categoria: string | null;
+  categoria_id?: number | null;
   observacao?: string | null;
   valor: number;
   data_despesa: string;
@@ -114,6 +128,7 @@ export interface DividaSimplificada {
   credor_id: number;
   credor: string;
   valor: number;
+  chave_pix?: string | null;
 }
 
 export interface ResumoSaldosGrupo {

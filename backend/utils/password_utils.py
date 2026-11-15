@@ -1,6 +1,3 @@
-import hashlib
-import hmac
-
 import bcrypt
 
 MIN_PASSWORD_LENGTH = 12
@@ -45,7 +42,5 @@ def check_password(password: str, hashed_password: str) -> bool:
             password.encode("utf-8"),
             hashed_password.encode("utf-8"),
         )
-    except (ValueError, TypeError):
-        # Compatibilidade com hashes SHA-256 antigos do projeto.
-        legacy_hash = hashlib.sha256(password.encode("utf-8")).hexdigest()
-        return hmac.compare_digest(legacy_hash, str(hashed_password))
+    except (ValueError, TypeError, UnicodeEncodeError):
+        return False

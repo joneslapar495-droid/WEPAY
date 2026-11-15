@@ -1,4 +1,3 @@
-import hashlib
 import pytest
 
 from utils.password_utils import (
@@ -29,7 +28,7 @@ def test_senha_com_unicode_invalido_e_rejeitada():
     assert validar_senha("\ud800" + "a" * (MIN_PASSWORD_LENGTH - 1))
 
 
-def test_hash_password_preserva_compatibilidade_com_hashes_legados():
+def test_hash_password_gera_um_hash():
     assert hash_password("123456")
 
 
@@ -39,15 +38,13 @@ def test_hash_password_rejeita_valores_que_nao_sao_texto(password):
         hash_password(password)
 
 
-def test_check_password_valida_bcrypt_e_hashes_legados():
+def test_check_password_valida_apenas_bcrypt():
     password = "SenhaSegura123!"
     hashed_password = hash_password(password)
     assert check_password(password, hashed_password) is True
     assert check_password("OutraSenha123!", hashed_password) is False
 
-    legacy_hash = hashlib.sha256(password.encode("utf-8")).hexdigest()
-    assert check_password(password, legacy_hash) is True
-    assert check_password("OutraSenha123!", legacy_hash) is False
+    assert check_password(password, "a" * 64) is False
 
 
 def test_is_legacy_password_hash_recognizes_sha256_hex_only():
