@@ -1,4 +1,5 @@
 import json
+import ssl
 from http.client import HTTPSConnection
 
 from config import Config
@@ -20,7 +21,11 @@ class NotificacaoService:
     def _post_expo_json(path, payload, headers):
         if path not in {_EXPO_PUSH_PATH, _EXPO_RECEIPTS_PATH}:
             raise ValueError("Endpoint Expo invalido.")
-        connection = HTTPSConnection(_EXPO_HOST, timeout=5)
+        connection = HTTPSConnection(
+            _EXPO_HOST,
+            timeout=5,
+            context=ssl.create_default_context(),
+        )
         try:
             connection.request(
                 "POST",

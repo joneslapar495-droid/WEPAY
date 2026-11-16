@@ -28,7 +28,10 @@ from database.connection import (
     _apply_participantes_migration,
     _apply_saldos_migration,
 )
-from database.legacy_finance_migrations import apply_legacy_finance_migrations
+from database.legacy_finance_migrations import (
+    _columns,
+    apply_legacy_finance_migrations,
+)
 
 
 class FakeCursor:
@@ -70,6 +73,15 @@ class FakeCursor:
 
     def fetchone(self) -> tuple[int]:
         return (self.counts.pop(0) if self.counts else 0,)
+
+
+def test_legacy_finance_columns_rejects_unlisted_table_names():
+    cursor = FakeCursor()
+
+    with pytest.raises(ValueError, match="Tabela de migração financeira"):
+        _columns(cursor, "despesas` WHERE 1=1 -- ")
+
+    assert cursor.statements == []
 
 
 def test_database_connections_use_a_shared_resetting_pool(monkeypatch):

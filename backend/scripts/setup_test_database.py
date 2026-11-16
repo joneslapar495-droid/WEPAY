@@ -52,12 +52,12 @@ def main() -> None:
         for host in ("localhost", "127.0.0.1"):
             account = f"'{test_user}'@'{host}'"
             cursor.execute(
-                f"CREATE USER IF NOT EXISTS {account} IDENTIFIED BY %s",
-                (test_password,),
+                "CREATE USER IF NOT EXISTS %s@%s IDENTIFIED BY %s",
+                (test_user, host, test_password),
             )
             cursor.execute(
-                f"ALTER USER {account} IDENTIFIED BY %s",
-                (test_password,),
+                "ALTER USER %s@%s IDENTIFIED BY %s",
+                (test_user, host, test_password),
             )
             cursor.execute(
                 f"GRANT ALL PRIVILEGES ON `{TEST_DATABASE}`.* "

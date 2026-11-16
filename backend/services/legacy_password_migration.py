@@ -8,11 +8,13 @@ def invalidate_legacy_passwords(connection, dry_run=True):
     """Replace legacy SHA-256 hashes with unusable bcrypt hashes."""
     cursor = cursor_for(connection)
     try:
-        lock_clause = "" if dry_run else " FOR UPDATE"
-        cursor.execute(
+        query = (
             "SELECT id, senha FROM usuarios WHERE CHAR_LENGTH(senha) = 64"
-            + lock_clause
+            if dry_run
+            else "SELECT id, senha FROM usuarios "
+            "WHERE CHAR_LENGTH(senha) = 64 FOR UPDATE"
         )
+        cursor.execute(query)
         users = [
             user
             for user in fetch_all(cursor)

@@ -150,6 +150,8 @@ def _record_schema_version() -> None:
 
 
 def _column_metadata(cursor: _MigrationCursor, table: str) -> dict[str, str]:
+    # Migration callers use fixed table names; the identifier helper escapes them.
+    # nosemgrep: rules.python.sqlalchemy.security.sqlalchemy-execute-raw-query.sqlalchemy-execute-raw-query, rules.python.lang.security.audit.formatted-sql-query.formatted-sql-query
     cursor.execute(f"SHOW COLUMNS FROM {quote_mysql_identifier(table)}")
     return {str(column[0]): str(column[1]) for column in cursor.fetchall()}
 
@@ -157,6 +159,8 @@ def _column_metadata(cursor: _MigrationCursor, table: str) -> dict[str, str]:
 def _index_metadata(
     cursor: _MigrationCursor, table: str
 ) -> dict[str, tuple[bool, tuple[str, ...]]]:
+    # Migration callers use fixed table names; the identifier helper escapes them.
+    # nosemgrep: rules.python.sqlalchemy.security.sqlalchemy-execute-raw-query.sqlalchemy-execute-raw-query, rules.python.lang.security.audit.formatted-sql-query.formatted-sql-query
     cursor.execute(f"SHOW INDEX FROM {quote_mysql_identifier(table)}")
     indexes: dict[str, tuple[bool, list[str]]] = {}
     for row in cursor.fetchall():
@@ -928,6 +932,8 @@ def _apply_participantes_migration(cursor: _MigrationCursor) -> None:
             f"DROP COLUMN {quote_mysql_identifier(name)}"
             for name in sorted(legacy_columns)
         )
+        # `legacy_columns` is restricted to fixed names and each identifier is quoted.
+        # nosemgrep: rules.python.sqlalchemy.security.sqlalchemy-execute-raw-query.sqlalchemy-execute-raw-query, rules.python.lang.security.audit.formatted-sql-query.formatted-sql-query
         cursor.execute(
             f"ALTER TABLE {quote_mysql_identifier('participantes')} {drop_clauses}"
         )
@@ -1122,6 +1128,8 @@ def _apply_saldos_migration(cursor: _MigrationCursor) -> None:
             f"DROP COLUMN {quote_mysql_identifier(name)}"
             for name in sorted(legacy_columns)
         )
+        # `legacy_columns` is restricted to fixed names and each identifier is quoted.
+        # nosemgrep: rules.python.sqlalchemy.security.sqlalchemy-execute-raw-query.sqlalchemy-execute-raw-query, rules.python.lang.security.audit.formatted-sql-query.formatted-sql-query
         cursor.execute(
             f"ALTER TABLE {quote_mysql_identifier('saldos')} {drop_clauses}"
         )

@@ -161,6 +161,8 @@ class FinanceiroService:
         placeholders = ",".join(["?"] * len(ids))
         cursor = cursor_for(conn)
         try:
+            # `placeholders` contains only bind markers; IDs are passed separately.
+            # nosemgrep: rules.python.sqlalchemy.security.sqlalchemy-execute-raw-query.sqlalchemy-execute-raw-query
             cursor.execute(
                 f"""
                 SELECT p.usuario_id

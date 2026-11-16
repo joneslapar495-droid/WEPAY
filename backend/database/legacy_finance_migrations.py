@@ -3,6 +3,18 @@ from typing import Any, Protocol
 from database.sql_identifiers import quote_mysql_identifier
 
 
+_COLUMN_METADATA_QUERIES = {
+    "despesas": "SHOW COLUMNS FROM `despesas`",
+    "despesa_divisoes": "SHOW COLUMNS FROM `despesa_divisoes`",
+    "pagamentos": "SHOW COLUMNS FROM `pagamentos`",
+}
+_INDEX_METADATA_QUERIES = {
+    "despesas": "SHOW INDEX FROM `despesas`",
+    "despesa_divisoes": "SHOW INDEX FROM `despesa_divisoes`",
+    "pagamentos": "SHOW INDEX FROM `pagamentos`",
+}
+
+
 class MigrationCursor(Protocol):
     def execute(self, operation: str, params: Any = None) -> Any: ...
 
@@ -14,7 +26,11 @@ class MigrationCursor(Protocol):
 def _columns(
     cursor: MigrationCursor, table: str
 ) -> dict[str, tuple[str, bool, Any]]:
-    cursor.execute(f"SHOW COLUMNS FROM {quote_mysql_identifier(table)}")
+    try:
+        query = _COLUMN_METADATA_QUERIES[table]
+    except KeyError as exc:
+        raise ValueError("Tabela de migração financeira não permitida.") from exc
+    cursor.execute(query)
     return {
         str(row[0]): (
             str(row[1]),
@@ -42,7 +58,11 @@ def _legacy_columns_need_adjustment(
 def _indexes(
     cursor: MigrationCursor, table: str
 ) -> dict[str, tuple[bool, tuple[str, ...]]]:
-    cursor.execute(f"SHOW INDEX FROM {quote_mysql_identifier(table)}")
+    try:
+        query = _INDEX_METADATA_QUERIES[table]
+    except KeyError as exc:
+        raise ValueError("Tabela de migração financeira não permitida.") from exc
+    cursor.execute(query)
     indexes: dict[str, tuple[bool, list[str]]] = {}
     for row in cursor.fetchall():
         name = str(row[2])
@@ -518,21 +538,27 @@ def _apply_pagamentos_migration(cursor: MigrationCursor) -> None:
                 f"ALTER TABLE pagamentos ADD COLUMN "
                 f"{quote_mysql_identifier(name)} {definition}"
             )
-    for old_column, target_column in (
-        ("pagador_participante_id", "pagador_id"),
-        ("recebedor_participante_id", "recebedor_id"),
-    ):
+    column_updates = {
+        ("pagador_participante_id", "pagador_id"): """
+            UPDATE pagamentos pg
+            JOIN participantes p
+              ON p.id = pg.pagador_participante_id
+              AND p.grupo_id = pg.grupo_id
+            SET pg.pagador_id = p.usuario_id
+            WHERE pg.pagador_id IS NULL
+        """,
+        ("recebedor_participante_id", "recebedor_id"): """
+            UPDATE pagamentos pg
+            JOIN participantes p
+              ON p.id = pg.recebedor_participante_id
+              AND p.grupo_id = pg.grupo_id
+            SET pg.recebedor_id = p.usuario_id
+            WHERE pg.recebedor_id IS NULL
+        """,
+    }
+    for old_column, target_column in column_updates:
         if old_column in columns:
-            cursor.execute(
-                f"""
-                UPDATE pagamentos pg
-                JOIN participantes p
-                  ON p.id = pg.{quote_mysql_identifier(old_column)}
-                  AND p.grupo_id = pg.grupo_id
-                SET pg.{quote_mysql_identifier(target_column)} = p.usuario_id
-                WHERE pg.{quote_mysql_identifier(target_column)} IS NULL
-                """
-            )
+            cursor.execute(column_updates[(old_column, target_column)])
     if "created_at" in columns:
         cursor.execute(
             "UPDATE pagamentos SET criado_em = created_at "

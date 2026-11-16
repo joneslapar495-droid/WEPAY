@@ -1,3 +1,5 @@
+import secrets
+
 from mysql.connector.errors import IntegrityError
 
 from models.usuario_model import UsuarioModel
@@ -7,7 +9,7 @@ from utils.password_utils import (
 )
 from utils.jwt_utils import generate_refresh_token, generate_token
 
-_DUMMY_PASSWORD_HASH = "$2b$12$S4/4uwnAbqqofrACpVOjIecnhPdzBPKRlRmpB.koaCFb7McB25aPa"
+_DUMMY_PASSWORD_HASH = hash_password(secrets.token_urlsafe(32))
 
 
 class AuthService:

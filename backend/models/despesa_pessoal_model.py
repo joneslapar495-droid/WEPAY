@@ -74,12 +74,15 @@ class DespesaPessoalModel:
             cursor = cursor_for(conn)
             try:
                 cursor.execute(
-                    f"""
+                    """
                     SELECT COUNT(*) AS total
                     FROM despesas_pessoais dp
                     LEFT JOIN categorias c ON c.id = dp.categoria_id
                     WHERE dp.usuario_id = ?
-                      AND {_FILTRO_CATEGORIA}
+                      AND (? IS NULL OR COALESCE(
+                          CONVERT(c.nome USING utf8mb4) COLLATE utf8mb4_unicode_ci,
+                          CONVERT(dp.categoria USING utf8mb4) COLLATE utf8mb4_unicode_ci
+                      ) = CONVERT(? USING utf8mb4) COLLATE utf8mb4_unicode_ci)
                       AND (? IS NULL OR dp.tipo = ?)
                       AND (? IS NULL OR dp.data_despesa >= ?)
                       AND (? IS NULL OR dp.data_despesa <= ?)
@@ -88,26 +91,41 @@ class DespesaPessoalModel:
                 )
                 total = int(fetch_one(cursor)["total"])
                 cursor.execute(
-                    f"""
-                    SELECT {_CATEGORIA_RESOLVIDA} AS categoria,
+                    """
+                    SELECT COALESCE(
+                               CONVERT(c.nome USING utf8mb4) COLLATE utf8mb4_unicode_ci,
+                               CONVERT(dp.categoria USING utf8mb4) COLLATE utf8mb4_unicode_ci
+                           ) AS categoria,
                            SUM(dp.valor) AS valor
                     FROM despesas_pessoais dp
                     LEFT JOIN categorias c ON c.id = dp.categoria_id
                     WHERE dp.usuario_id = ?
-                      AND {_FILTRO_CATEGORIA}
+                      AND (? IS NULL OR COALESCE(
+                          CONVERT(c.nome USING utf8mb4) COLLATE utf8mb4_unicode_ci,
+                          CONVERT(dp.categoria USING utf8mb4) COLLATE utf8mb4_unicode_ci
+                      ) = CONVERT(? USING utf8mb4) COLLATE utf8mb4_unicode_ci)
                       AND (? IS NULL OR dp.tipo = ?)
                       AND (? IS NULL OR dp.data_despesa >= ?)
                       AND (? IS NULL OR dp.data_despesa <= ?)
-                    GROUP BY {_CATEGORIA_RESOLVIDA}
-                    ORDER BY {_CATEGORIA_RESOLVIDA}
+                    GROUP BY COALESCE(
+                        CONVERT(c.nome USING utf8mb4) COLLATE utf8mb4_unicode_ci,
+                        CONVERT(dp.categoria USING utf8mb4) COLLATE utf8mb4_unicode_ci
+                    )
+                    ORDER BY COALESCE(
+                        CONVERT(c.nome USING utf8mb4) COLLATE utf8mb4_unicode_ci,
+                        CONVERT(dp.categoria USING utf8mb4) COLLATE utf8mb4_unicode_ci
+                    )
                     """,
                     params,
                 )
                 categorias = fetch_all(cursor)
                 cursor.execute(
-                    f"""
+                    """
                     SELECT dp.id, dp.usuario_id, dp.descricao, dp.valor,
-                           {_CATEGORIA_RESOLVIDA} AS categoria,
+                           COALESCE(
+                               CONVERT(c.nome USING utf8mb4) COLLATE utf8mb4_unicode_ci,
+                               CONVERT(dp.categoria USING utf8mb4) COLLATE utf8mb4_unicode_ci
+                           ) AS categoria,
                            dp.categoria_id, dp.tipo,
                            CAST(dp.data_despesa AS CHAR) AS data_despesa,
                            CAST(dp.criado_em AS CHAR) AS criado_em,
@@ -115,7 +133,10 @@ class DespesaPessoalModel:
                     FROM despesas_pessoais dp
                     LEFT JOIN categorias c ON c.id = dp.categoria_id
                     WHERE dp.usuario_id = ?
-                      AND {_FILTRO_CATEGORIA}
+                      AND (? IS NULL OR COALESCE(
+                          CONVERT(c.nome USING utf8mb4) COLLATE utf8mb4_unicode_ci,
+                          CONVERT(dp.categoria USING utf8mb4) COLLATE utf8mb4_unicode_ci
+                      ) = CONVERT(? USING utf8mb4) COLLATE utf8mb4_unicode_ci)
                       AND (? IS NULL OR dp.tipo = ?)
                       AND (? IS NULL OR dp.data_despesa >= ?)
                       AND (? IS NULL OR dp.data_despesa <= ?)
@@ -144,9 +165,12 @@ class DespesaPessoalModel:
             cursor = cursor_for(conn)
             try:
                 cursor.execute(
-                    f"""
+                    """
                     SELECT dp.id, dp.usuario_id, dp.descricao, dp.valor,
-                           {_CATEGORIA_RESOLVIDA} AS categoria,
+                           COALESCE(
+                               CONVERT(c.nome USING utf8mb4) COLLATE utf8mb4_unicode_ci,
+                               CONVERT(dp.categoria USING utf8mb4) COLLATE utf8mb4_unicode_ci
+                           ) AS categoria,
                            dp.categoria_id, dp.tipo, dp.data_despesa,
                            dp.criado_em, dp.atualizado_em
                     FROM despesas_pessoais dp

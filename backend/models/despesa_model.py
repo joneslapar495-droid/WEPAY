@@ -20,23 +20,35 @@ class DespesaModel:
                 )
                 resumo = fetch_one(cursor)
                 cursor.execute(
-                    f"""
-                    SELECT {_CATEGORIA_RESOLVIDA} AS categoria,
+                    """
+                    SELECT COALESCE(
+                               CONVERT(c.nome USING utf8mb4) COLLATE utf8mb4_unicode_ci,
+                               CONVERT(d.categoria USING utf8mb4) COLLATE utf8mb4_unicode_ci
+                           ) AS categoria,
                            SUM(d.valor) AS valor
                     FROM despesas d
                     LEFT JOIN categorias c ON c.id = d.categoria_id
                     WHERE d.grupo_id = ?
-                    GROUP BY {_CATEGORIA_RESOLVIDA}
-                    ORDER BY {_CATEGORIA_RESOLVIDA}
+                    GROUP BY COALESCE(
+                        CONVERT(c.nome USING utf8mb4) COLLATE utf8mb4_unicode_ci,
+                        CONVERT(d.categoria USING utf8mb4) COLLATE utf8mb4_unicode_ci
+                    )
+                    ORDER BY COALESCE(
+                        CONVERT(c.nome USING utf8mb4) COLLATE utf8mb4_unicode_ci,
+                        CONVERT(d.categoria USING utf8mb4) COLLATE utf8mb4_unicode_ci
+                    )
                     """,
                     (grupo_id,),
                 )
                 categorias = fetch_all(cursor)
                 cursor.execute(
-                    f"""
+                    """
                     SELECT d.id, d.grupo_id, d.pagador_id, d.criado_por,
                            d.descricao,
-                           {_CATEGORIA_RESOLVIDA} AS categoria,
+                           COALESCE(
+                               CONVERT(c.nome USING utf8mb4) COLLATE utf8mb4_unicode_ci,
+                               CONVERT(d.categoria USING utf8mb4) COLLATE utf8mb4_unicode_ci
+                           ) AS categoria,
                            d.categoria_id, d.valor, d.data_despesa,
                            d.vencimento,
                            CAST(d.criado_em AS CHAR) AS criado_em,
