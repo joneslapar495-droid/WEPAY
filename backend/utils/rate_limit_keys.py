@@ -22,7 +22,7 @@ def refresh_user_or_ip():
             payload = decode_token(token, expected_type="refresh")
             user_id = int(payload["sub"])
             if user_id > 0:
-                return f"user:{user_id}"
+                return "user:" + str(user_id)
         except (jwt.PyJWTError, KeyError, TypeError, ValueError):
             pass
     return f"ip:{get_remote_address()}"

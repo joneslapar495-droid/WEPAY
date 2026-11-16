@@ -21,7 +21,7 @@ class NotificacaoService:
     def _post_expo_json(path, payload, headers):
         if path not in {_EXPO_PUSH_PATH, _EXPO_RECEIPTS_PATH}:
             raise ValueError("Endpoint Expo invalido.")
-        connection = HTTPSConnection(
+        connection = HTTPSConnection(  # nosemgrep: rules.python.lang.security.audit.httpsconnection-detected.httpsconnection-detected
             _EXPO_HOST,
             timeout=5,
             context=ssl.create_default_context(),

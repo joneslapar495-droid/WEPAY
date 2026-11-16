@@ -27,6 +27,8 @@ from database.connection import (
     _apply_user_categories_migration,
     _apply_participantes_migration,
     _apply_saldos_migration,
+    _column_metadata,
+    _index_metadata,
 )
 from database.legacy_finance_migrations import (
     _columns,
@@ -80,6 +82,16 @@ def test_legacy_finance_columns_rejects_unlisted_table_names():
 
     with pytest.raises(ValueError, match="Tabela de migração financeira"):
         _columns(cursor, "despesas` WHERE 1=1 -- ")
+
+    assert cursor.statements == []
+
+
+@pytest.mark.parametrize("metadata", (_column_metadata, _index_metadata))
+def test_connection_metadata_rejects_unlisted_table_names(metadata):
+    cursor = FakeCursor()
+
+    with pytest.raises(ValueError, match="Tabela de migração não permitida"):
+        metadata(cursor, "participantes` WHERE 1=1 -- ")
 
     assert cursor.statements == []
 

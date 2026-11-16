@@ -149,19 +149,88 @@ def _record_schema_version() -> None:
         connection.close()
 
 
+_COLUMN_METADATA_QUERIES = {
+    "usuarios": "SHOW COLUMNS FROM `usuarios`",
+    "grupos": "SHOW COLUMNS FROM `grupos`",
+    "refresh_tokens": "SHOW COLUMNS FROM `refresh_tokens`",
+    "despesas": "SHOW COLUMNS FROM `despesas`",
+    "categorias": "SHOW COLUMNS FROM `categorias`",
+    "notificacoes": "SHOW COLUMNS FROM `notificacoes`",
+    "push_outbox_destinatarios": "SHOW COLUMNS FROM `push_outbox_destinatarios`",
+    "pagamentos": "SHOW COLUMNS FROM `pagamentos`",
+    "despesas_pessoais": "SHOW COLUMNS FROM `despesas_pessoais`",
+    "participantes": "SHOW COLUMNS FROM `participantes`",
+    "saldos": "SHOW COLUMNS FROM `saldos`",
+}
+_INDEX_METADATA_QUERIES = {
+    "despesas": "SHOW INDEX FROM `despesas`",
+    "push_outbox": "SHOW INDEX FROM `push_outbox`",
+    "gemini_usage_diaria": "SHOW INDEX FROM `gemini_usage_diaria`",
+    "pagamentos": "SHOW INDEX FROM `pagamentos`",
+    "categorias": "SHOW INDEX FROM `categorias`",
+    "despesas_pessoais": "SHOW INDEX FROM `despesas_pessoais`",
+    "participantes": "SHOW INDEX FROM `participantes`",
+    "saldos": "SHOW INDEX FROM `saldos`",
+}
+_PARTICIPANTES_DROP_QUERIES = {
+    frozenset({"status"}):
+        "ALTER TABLE participantes DROP COLUMN `status`",
+    frozenset({"data_entrada"}):
+        "ALTER TABLE participantes DROP COLUMN `data_entrada`",
+    frozenset({"data_saida"}):
+        "ALTER TABLE participantes DROP COLUMN `data_saida`",
+    frozenset({"status", "data_entrada"}):
+        "ALTER TABLE participantes DROP COLUMN `data_entrada`, "
+        "DROP COLUMN `status`",
+    frozenset({"status", "data_saida"}):
+        "ALTER TABLE participantes DROP COLUMN `data_saida`, "
+        "DROP COLUMN `status`",
+    frozenset({"data_entrada", "data_saida"}):
+        "ALTER TABLE participantes DROP COLUMN `data_entrada`, "
+        "DROP COLUMN `data_saida`",
+    frozenset({"status", "data_entrada", "data_saida"}):
+        "ALTER TABLE participantes DROP COLUMN `data_entrada`, "
+        "DROP COLUMN `data_saida`, DROP COLUMN `status`",
+}
+_SALDOS_DROP_QUERIES = {
+    frozenset({"participante_id"}):
+        "ALTER TABLE saldos DROP COLUMN `participante_id`",
+    frozenset({"valor_saldo"}):
+        "ALTER TABLE saldos DROP COLUMN `valor_saldo`",
+    frozenset({"updated_at"}):
+        "ALTER TABLE saldos DROP COLUMN `updated_at`",
+    frozenset({"participante_id", "valor_saldo"}):
+        "ALTER TABLE saldos DROP COLUMN `participante_id`, "
+        "DROP COLUMN `valor_saldo`",
+    frozenset({"participante_id", "updated_at"}):
+        "ALTER TABLE saldos DROP COLUMN `participante_id`, "
+        "DROP COLUMN `updated_at`",
+    frozenset({"valor_saldo", "updated_at"}):
+        "ALTER TABLE saldos DROP COLUMN `updated_at`, "
+        "DROP COLUMN `valor_saldo`",
+    frozenset({"participante_id", "valor_saldo", "updated_at"}):
+        "ALTER TABLE saldos DROP COLUMN `participante_id`, "
+        "DROP COLUMN `updated_at`, DROP COLUMN `valor_saldo`",
+}
+
+
 def _column_metadata(cursor: _MigrationCursor, table: str) -> dict[str, str]:
-    # Migration callers use fixed table names; the identifier helper escapes them.
-    # nosemgrep: rules.python.sqlalchemy.security.sqlalchemy-execute-raw-query.sqlalchemy-execute-raw-query, rules.python.lang.security.audit.formatted-sql-query.formatted-sql-query
-    cursor.execute(f"SHOW COLUMNS FROM {quote_mysql_identifier(table)}")
+    try:
+        query = _COLUMN_METADATA_QUERIES[table]
+    except KeyError as exc:
+        raise ValueError("Tabela de migração não permitida.") from exc
+    cursor.execute(query)
     return {str(column[0]): str(column[1]) for column in cursor.fetchall()}
 
 
 def _index_metadata(
     cursor: _MigrationCursor, table: str
 ) -> dict[str, tuple[bool, tuple[str, ...]]]:
-    # Migration callers use fixed table names; the identifier helper escapes them.
-    # nosemgrep: rules.python.sqlalchemy.security.sqlalchemy-execute-raw-query.sqlalchemy-execute-raw-query, rules.python.lang.security.audit.formatted-sql-query.formatted-sql-query
-    cursor.execute(f"SHOW INDEX FROM {quote_mysql_identifier(table)}")
+    try:
+        query = _INDEX_METADATA_QUERIES[table]
+    except KeyError as exc:
+        raise ValueError("Tabela de migração não permitida.") from exc
+    cursor.execute(query)
     indexes: dict[str, tuple[bool, list[str]]] = {}
     for row in cursor.fetchall():
         name = str(row[2])
@@ -928,15 +997,7 @@ def _apply_participantes_migration(cursor: _MigrationCursor) -> None:
 
     if legacy_columns:
         _drop_indexes_for_columns(cursor, "participantes", legacy_columns)
-        drop_clauses = ", ".join(
-            f"DROP COLUMN {quote_mysql_identifier(name)}"
-            for name in sorted(legacy_columns)
-        )
-        # `legacy_columns` is restricted to fixed names and each identifier is quoted.
-        # nosemgrep: rules.python.sqlalchemy.security.sqlalchemy-execute-raw-query.sqlalchemy-execute-raw-query, rules.python.lang.security.audit.formatted-sql-query.formatted-sql-query
-        cursor.execute(
-            f"ALTER TABLE {quote_mysql_identifier('participantes')} {drop_clauses}"
-        )
+        cursor.execute(_PARTICIPANTES_DROP_QUERIES[frozenset(legacy_columns)])
 
     indexes = _index_metadata(cursor, "participantes")
     if not any(columns == ("grupo_id", "ativo") for _, columns in indexes.values()):
@@ -1124,15 +1185,7 @@ def _apply_saldos_migration(cursor: _MigrationCursor) -> None:
                     f"DROP FOREIGN KEY {quote_mysql_identifier(name)}"
                 )
         _drop_indexes_for_columns(cursor, "saldos", legacy_columns)
-        drop_clauses = ", ".join(
-            f"DROP COLUMN {quote_mysql_identifier(name)}"
-            for name in sorted(legacy_columns)
-        )
-        # `legacy_columns` is restricted to fixed names and each identifier is quoted.
-        # nosemgrep: rules.python.sqlalchemy.security.sqlalchemy-execute-raw-query.sqlalchemy-execute-raw-query, rules.python.lang.security.audit.formatted-sql-query.formatted-sql-query
-        cursor.execute(
-            f"ALTER TABLE {quote_mysql_identifier('saldos')} {drop_clauses}"
-        )
+        cursor.execute(_SALDOS_DROP_QUERIES[frozenset(legacy_columns)])
 
 
 def _apply_compatibility_migrations() -> None:

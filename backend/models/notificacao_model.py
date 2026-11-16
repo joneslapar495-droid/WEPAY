@@ -115,9 +115,9 @@ class NotificacaoModel:
         with get_connection_context() as conn:
             cursor = cursor_for(conn)
             try:
-                # `placeholders` contains only bind markers; IDs are passed separately.
-                # nosemgrep: rules.python.sqlalchemy.security.sqlalchemy-execute-raw-query.sqlalchemy-execute-raw-query
                 cursor.execute(
+                    # `placeholders` contains only bind markers; IDs are passed separately.
+                    # nosemgrep: rules.python.sqlalchemy.security.sqlalchemy-execute-raw-query.sqlalchemy-execute-raw-query
                     f"""
                     SELECT t.id AS token_id, t.usuario_id, t.token,
                            u.sons_notificacoes_ativos

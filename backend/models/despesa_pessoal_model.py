@@ -1,15 +1,5 @@
 from database.connection import get_connection_context, cursor_for, fetch_one, fetch_all
 
-_CATEGORIA_RESOLVIDA = (
-    "COALESCE("
-    "CONVERT(c.nome USING utf8mb4) COLLATE utf8mb4_unicode_ci, "
-    "CONVERT(dp.categoria USING utf8mb4) COLLATE utf8mb4_unicode_ci)"
-)
-_FILTRO_CATEGORIA = (
-    f"(? IS NULL OR {_CATEGORIA_RESOLVIDA} = "
-    "CONVERT(? USING utf8mb4) COLLATE utf8mb4_unicode_ci)"
-)
-
 
 class DespesaPessoalModel:
     @staticmethod

@@ -72,6 +72,11 @@ describe("date input helpers", () => {
     expect(formatDateTimeForDisplay("invalid timestamp")).toBe("invalid timestamp");
   });
 
+  it("rejects timestamps with excessive fractional-second input", () => {
+    const timestamp = `2026-11-07 13:05:18.${"1".repeat(100)}Z`;
+    expect(formatDateTimeForDisplay(timestamp)).toBe(timestamp);
+  });
+
   it("supports personal expense record formatting without changing timestamp semantics", () => {
     const options = {
       yearFormat: "2-digit" as const,

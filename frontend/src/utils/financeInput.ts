@@ -113,8 +113,10 @@ export function formatDateTimeForDisplay(
     separator = " às ",
     invalidValue = value,
   } = options;
-  const match = value.trim().match(
-    /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?(Z|[+-]\d{2}:?\d{2})?$/,
+  const normalizedValue = value.trim();
+  if (normalizedValue.length > 35) return invalidValue;
+  const match = normalizedValue.match(
+    /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2})(?:\.\d{1,9})?)?(Z|[+-]\d{2}:?\d{2})?$/,
   );
   if (!match) return invalidValue;
 
@@ -135,7 +137,7 @@ export function formatDateTimeForDisplay(
     return `${day}/${month}/${displayedYear}${separator}${hour}:${minute}`;
   }
 
-  const timestamp = value.trim()
+  const timestamp = normalizedValue
     .replace(" ", "T")
     .replace(/([+-]\d{2})(\d{2})$/, "$1:$2");
   const date = new Date(timestamp);

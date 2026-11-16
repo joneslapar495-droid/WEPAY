@@ -13,6 +13,26 @@ _INDEX_METADATA_QUERIES = {
     "despesa_divisoes": "SHOW INDEX FROM `despesa_divisoes`",
     "pagamentos": "SHOW INDEX FROM `pagamentos`",
 }
+_PAYMENT_REFERENCE_VALIDATION_QUERIES = {
+    "pagador_participante_id": """
+        SELECT COUNT(*)
+        FROM pagamentos pg
+        LEFT JOIN participantes p
+          ON p.id = pg.pagador_participante_id
+          AND p.grupo_id = pg.grupo_id
+        WHERE pg.pagador_participante_id IS NOT NULL
+          AND p.id IS NULL
+    """,
+    "recebedor_participante_id": """
+        SELECT COUNT(*)
+        FROM pagamentos pg
+        LEFT JOIN participantes p
+          ON p.id = pg.recebedor_participante_id
+          AND p.grupo_id = pg.grupo_id
+        WHERE pg.recebedor_participante_id IS NOT NULL
+          AND p.id IS NULL
+    """,
+}
 
 
 class MigrationCursor(Protocol):
@@ -506,16 +526,7 @@ def _apply_pagamentos_migration(cursor: MigrationCursor) -> None:
     ):
         if old_column in columns:
             if _count(
-                cursor,
-                f"""
-                SELECT COUNT(*)
-                FROM pagamentos pg
-                LEFT JOIN participantes p
-                  ON p.id = pg.{quote_mysql_identifier(old_column)}
-                  AND p.grupo_id = pg.grupo_id
-                WHERE pg.{quote_mysql_identifier(old_column)} IS NOT NULL
-                  AND p.id IS NULL
-                """,
+                cursor, _PAYMENT_REFERENCE_VALIDATION_QUERIES[old_column]
             ):
                 raise RuntimeError(
                     "Migração de pagamentos interrompida: participante legado inexistente."

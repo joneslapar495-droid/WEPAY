@@ -1,11 +1,5 @@
 from database.connection import get_connection_context, cursor_for, fetch_one, fetch_all
 
-_CATEGORIA_RESOLVIDA = (
-    "COALESCE("
-    "CONVERT(c.nome USING utf8mb4) COLLATE utf8mb4_unicode_ci, "
-    "CONVERT(d.categoria USING utf8mb4) COLLATE utf8mb4_unicode_ci)"
-)
-
 
 class DespesaModel:
     @staticmethod
@@ -84,10 +78,18 @@ class DespesaModel:
             cursor = cursor_for(conn)
             try:
                 cursor.execute(
-                    f"SELECT d.*, {_CATEGORIA_RESOLVIDA} AS categoria, "
-                    "u.nome AS pagador_nome FROM despesas d "
-                    "LEFT JOIN categorias c ON c.id = d.categoria_id "
-                    "JOIN usuarios u ON u.id = d.pagador_id WHERE d.id = ?",
+                    """
+                    SELECT d.*,
+                           COALESCE(
+                               CONVERT(c.nome USING utf8mb4) COLLATE utf8mb4_unicode_ci,
+                               CONVERT(d.categoria USING utf8mb4) COLLATE utf8mb4_unicode_ci
+                           ) AS categoria,
+                           u.nome AS pagador_nome
+                    FROM despesas d
+                    LEFT JOIN categorias c ON c.id = d.categoria_id
+                    JOIN usuarios u ON u.id = d.pagador_id
+                    WHERE d.id = ?
+                    """,
                     (despesa_id,),
                 )
                 row = fetch_one(cursor)
