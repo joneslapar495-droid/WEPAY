@@ -1,6 +1,7 @@
 """Testes de preferências, dispositivos e envio de notificações push."""
 
 import json
+import ssl
 
 import pytest
 
@@ -44,9 +45,10 @@ def _mock_expo_connection(monkeypatch, response_body):
             return response_body
 
     class Connection:
-        def __init__(self, host, timeout):
+        def __init__(self, host, timeout, context):
             captured["host"] = host
             captured["timeout"] = timeout
+            captured["context"] = context
 
         def request(self, method, path, body, headers):
             captured["method"] = method
@@ -328,6 +330,7 @@ def test_push_request_usa_servico_expo(monkeypatch):
     assert capturado["method"] == "POST"
     assert capturado["payload"][0]["title"] == "Teste"
     assert capturado["timeout"] == 5
+    assert capturado["context"].verify_mode == ssl.CERT_REQUIRED
     assert capturado["headers"]["Authorization"] == "Bearer expo-test-access"
 
 

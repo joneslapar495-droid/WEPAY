@@ -18,18 +18,18 @@ _PAYMENT_REFERENCE_VALIDATION_QUERIES = {
         SELECT COUNT(*)
         FROM pagamentos pg
         LEFT JOIN participantes p
-          ON p.id = pg.pagador_participante_id
+          ON p.id = pg.`pagador_participante_id`
           AND p.grupo_id = pg.grupo_id
-        WHERE pg.pagador_participante_id IS NOT NULL
+        WHERE pg.`pagador_participante_id` IS NOT NULL
           AND p.id IS NULL
     """,
     "recebedor_participante_id": """
         SELECT COUNT(*)
         FROM pagamentos pg
         LEFT JOIN participantes p
-          ON p.id = pg.recebedor_participante_id
+          ON p.id = pg.`recebedor_participante_id`
           AND p.grupo_id = pg.grupo_id
-        WHERE pg.recebedor_participante_id IS NOT NULL
+        WHERE pg.`recebedor_participante_id` IS NOT NULL
           AND p.id IS NULL
     """,
 }
@@ -553,18 +553,18 @@ def _apply_pagamentos_migration(cursor: MigrationCursor) -> None:
         ("pagador_participante_id", "pagador_id"): """
             UPDATE pagamentos pg
             JOIN participantes p
-              ON p.id = pg.pagador_participante_id
+              ON p.id = pg.`pagador_participante_id`
               AND p.grupo_id = pg.grupo_id
-            SET pg.pagador_id = p.usuario_id
-            WHERE pg.pagador_id IS NULL
+              SET pg.`pagador_id` = p.usuario_id
+              WHERE pg.`pagador_id` IS NULL
         """,
         ("recebedor_participante_id", "recebedor_id"): """
             UPDATE pagamentos pg
             JOIN participantes p
-              ON p.id = pg.recebedor_participante_id
+              ON p.id = pg.`recebedor_participante_id`
               AND p.grupo_id = pg.grupo_id
-            SET pg.recebedor_id = p.usuario_id
-            WHERE pg.recebedor_id IS NULL
+              SET pg.`recebedor_id` = p.usuario_id
+              WHERE pg.`recebedor_id` IS NULL
         """,
     }
     for old_column, target_column in column_updates:
